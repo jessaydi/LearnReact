@@ -1,0 +1,298 @@
+
+<!-- ===================================================== 06 -->
+<section class="module" id="m06" data-short="Événements, listes, formulaires">
+<header class="module-head"><span class="module-num">06</span><div><p class="module-kicker">Interactivité</p><h2>Événements, conditions, listes et formulaires</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Réagir aux actions de l'utilisateur sans déclencher de boucle infinie.</li>
+  <li>Afficher un élément ou un autre selon une condition.</li>
+  <li>Afficher une liste et comprendre à quoi sert la <code>key</code>.</li>
+  <li>Écrire un formulaire « contrôlé » et comprendre son cycle.</li>
+</ul></div>
+
+<h3>Les événements</h3>
+<p>Un événement, c'est une action de l'utilisateur que le navigateur détecte : un clic, une frappe au clavier, un envoi de formulaire. Voici ce qui se passe quand l'utilisateur clique sur un bouton React :</p>
+<ol class="steps three">
+  <li><b>Le navigateur détecte le clic</b><span>sur le bouton, dans le DOM.</span></li>
+  <li><b>React appelle ta fonction</b><span>celle que tu as donnée à <code>onClick</code>, avec un objet qui décrit l'événement.</span></li>
+  <li><b>Ta fonction agit</b><span>en général, elle appelle un setter : nouvel état, nouveau rendu.</span></li>
+</ol>
+<figure class="code"><figcaption>SaveButton.jsx</figcaption><pre><code class="language-jsx">function SaveButton({ onSave }) {
+  function handleClick(event) {
+    // event : l'objet qui décrit le clic (sur quoi, avec quelles touches…)
+    console.log("cliqué sur", event.target);
+    onSave();
+  }
+
+  return <button onClick={handleClick}>Enregistrer</button>;
+}</code></pre></figure>
+<p>Ce que tu utiliseras le plus souvent dans l'objet événement :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Propriété ou méthode</th><th>Ce qu'elle donne</th><th>Exemple d'usage</th></tr></thead>
+<tbody>
+<tr><td><code>e.target</code></td><td>l'élément du DOM concerné</td><td>savoir quel champ a changé</td></tr>
+<tr><td><code>e.target.value</code></td><td>le texte d'un champ de saisie ou d'un <code>select</code></td><td><code>setEmail(e.target.value)</code></td></tr>
+<tr><td><code>e.target.checked</code></td><td>l'état d'une case à cocher</td><td><code>setAccept(e.target.checked)</code></td></tr>
+<tr><td><code>e.key</code></td><td>la touche pressée (événements clavier)</td><td><code>if (e.key === "Enter") …</code></td></tr>
+<tr><td><code>e.preventDefault()</code></td><td>annule le comportement par défaut du navigateur</td><td>empêcher un formulaire de recharger la page</td></tr>
+</tbody></table></div>
+<p>Les événements les plus courants : <code>onClick</code>, <code>onChange</code> (un champ change), <code>onSubmit</code> (un formulaire est envoyé), <code>onKeyDown</code> (une touche), <code>onFocus</code> et <code>onBlur</code> (un champ gagne ou perd le focus).</p>
+
+<h4>Passer une fonction, ou l'appeler ?</h4>
+<p>C'est l'erreur la plus fréquente des débutants :</p>
+<figure class="code"><figcaption>Modal.jsx</figcaption><pre><code class="language-jsx"><button onClick={openModal}>Ouvrir</button>         // JUSTE : on donne la fonction
+<button onClick={openModal()}>Ouvrir</button>       // FAUX  : on l'exécute pendant l'affichage
+<button onClick={() => remove(42)}>Supprimer</button> // JUSTE : une petite fonction qui appellera remove(42)</code></pre></figure>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p><code>onClick={openModal}</code>, c'est laisser ton numéro de téléphone au bouton : « appelle-moi quand on te clique ». <code>onClick={openModal()}</code>, c'est composer le numéro tout de suite, au moment où la page s'affiche, et donner au bouton le résultat de l'appel.</p>
+<p>Quand la fonction a besoin d'un argument, on écrit un petit mot à transmettre : <code>() => remove(42)</code> veut dire « au clic, appelle <code>remove</code> avec 42 ».</p>
+</aside>
+<p>Si la fonction appelée trop tôt modifie l'état (<code>onClick={setOpen(true)}</code>), c'est la boucle infinie : l'affichage appelle le setter, qui demande un nouvel affichage, qui rappelle le setter… React s'arrête avec l'erreur <em>Too many re-renders</em>.</p>
+
+<h3>Afficher sous condition</h3>
+<p>Il y a quatre façons d'afficher quelque chose « seulement si », toutes en JavaScript ordinaire :</p>
+<figure class="code"><figcaption>TaskPanel.jsx</figcaption><pre><code class="language-jsx">function TaskPanel({ tasks, isLoading, error }) {
+  // 1. if + return anticipé : pour les cas « à part », qui remplacent tout l'affichage
+  if (isLoading) return <Spinner />;
+  if (error) return <p className="error">Erreur : {error.message}</p>;
+
+  // 2. une variable préparée avant le return : pour une logique un peu longue
+  let footer = null;
+  if (tasks.length > 10) footer = <p>Pense à archiver tes tâches terminées.</p>;
+
+  return (
+    <div>
+      {/* 3. ternaire : afficher l'un OU l'autre */}
+      {tasks.length === 0 ? <EmptyState /> : <TaskList tasks={tasks} />}
+
+      {/* 4. && : afficher OU rien */}
+      {tasks.length > 0 && <p>{tasks.length} tâches</p>}
+
+      {footer}
+    </div>
+  );
+}</code></pre></figure>
+<p>Pour <code>&&</code>, souviens-toi du module 01 : <code>a && b</code> vaut <code>b</code> si <code>a</code> est vrai, et <code>a</code> sinon. Et du module 03 : React n'affiche rien pour <code>false</code>, <code>null</code> et <code>undefined</code>, mais il affiche les nombres. Joue avec les conditions :</p>
+
+<div class="demo" id="demo-cond">
+  <div class="demo-head"><span>Démo · quelle branche s'affiche ?</span></div>
+  <div class="demo-body">
+    <div class="cond-controls">
+      <label class="pp-check"><input id="cs-loading" type="checkbox"> isLoading</label>
+      <label class="pp-check"><input id="cs-error" type="checkbox"> error</label>
+      <label for="cs-count">tasks.length = <strong data-out="count">2</strong></label>
+      <input id="cs-count" type="range" min="0" max="3" step="1" value="2">
+    </div>
+    <div class="cond-grid">
+      <pre class="cond-code" aria-label="Code du composant"><span class="ln" data-line="1">if (isLoading) return &lt;Spinner /&gt;;</span>
+<span class="ln" data-line="2">if (error) return &lt;p&gt;Erreur : {error.message}&lt;/p&gt;;</span>
+<span class="ln" data-line="3">return (</span>
+<span class="ln" data-line="4">  &lt;div&gt;</span>
+<span class="ln" data-line="5">    {tasks.length === 0 ? &lt;EmptyState /&gt; : &lt;TaskList /&gt;}</span>
+<span class="ln" data-line="6">    {tasks.length &gt; 0 &amp;&amp; &lt;p&gt;{tasks.length} tâches&lt;/p&gt;}</span>
+<span class="ln" data-line="7">    {tasks.length &amp;&amp; &lt;p&gt;Version piégée&lt;/p&gt;}</span>
+<span class="ln" data-line="8">  &lt;/div&gt;</span>
+<span class="ln" data-line="9">);</span></pre>
+      <div class="cond-preview" data-out="preview" aria-live="polite"></div>
+    </div>
+    <p class="demo-hint" data-out="explain"></p>
+  </div>
+</div>
+<aside class="note trap"><p class="label">Piège</p>
+<p>Ligne 7 de la démo : avec une liste vide, <code>{tasks.length && …}</code> affiche un <strong>0</strong> à l'écran. <code>0 && …</code> vaut <code>0</code>, et React affiche les nombres. Écris toujours une vraie condition booléenne : <code>tasks.length > 0 &&</code>.</p>
+</aside>
+
+<h3>Afficher une liste</h3>
+<p>Pour afficher une liste, on transforme le tableau de <strong>données</strong> en tableau de <strong>JSX</strong> avec <code>map</code>. React sait afficher un tableau d'éléments (module 03, règle 3).</p>
+<figure class="code"><figcaption>TaskList.jsx</figcaption><pre><code class="language-jsx">const tasks = [
+  { id: "t1", title: "Écrire les specs" },
+  { id: "t2", title: "Relire la PR" },
+];
+
+function TaskList() {
+  return (
+    <ul>
+      {tasks.map(task => (
+        <li key={task.id}>{task.title}</li>
+      ))}
+    </ul>
+  );
+}</code></pre></figure>
+<div class="table-wrap"><table>
+<thead><tr><th>Donnée</th><th>→ ce que map produit</th></tr></thead>
+<tbody>
+<tr><td><code>{ id: "t1", title: "Écrire les specs" }</code></td><td><code>&lt;li key="t1"&gt;Écrire les specs&lt;/li&gt;</code></td></tr>
+<tr><td><code>{ id: "t2", title: "Relire la PR" }</code></td><td><code>&lt;li key="t2"&gt;Relire la PR&lt;/li&gt;</code></td></tr>
+</tbody></table></div>
+
+<h4>À quoi sert la key ?</h4>
+<p>Quand la liste change (un ajout, une suppression, un tri), React compare l'ancienne et la nouvelle liste (module 00, étape 3). Il doit savoir <strong>quelle ligne est quelle ligne</strong> d'un affichage à l'autre, pour déplacer, garder ou supprimer les bons éléments du DOM. La <code>key</code> est l'identité de chaque élément.</p>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Les coureurs d'un marathon portent un dossard. Quand ils changent de position, on les reconnaît grâce à leur numéro, pas grâce à leur place dans le peloton. Utiliser l'index comme <code>key</code>, c'est identifier les coureurs par leur position : dès que le premier abandonne, tout le monde change d'identité.</p>
+</aside>
+<p>Chaque ligne ci-dessous contient un champ de note. Ces notes ne sont pas dans les données : elles vivent dans le champ lui-même, comme un texte en cours de saisie. Supprime la première tâche dans les deux modes :</p>
+
+<div class="demo" id="demo-keys">
+  <div class="demo-head"><span>Démo · l'index comme key</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Choix de la key">
+      <button type="button" role="radio" aria-checked="true" data-mode="index">key={index}</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="id">key={task.id}</button>
+    </div>
+    <ul class="key-list" data-out="list"></ul>
+    <div class="demo-actions"><button type="button" class="btn" data-act="delete">Supprimer la première tâche</button></div>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite">Avant de supprimer, regarde quelle note accompagne chaque tâche.</p>
+  </div>
+</div>
+
+<p>Avec <code>key={index}</code>, après la suppression, React voit : « la ligne 0 existe toujours, la ligne 1 aussi, la ligne 2 a disparu ». Il garde donc les deux premières lignes du DOM (avec leurs notes), change seulement leurs titres, et supprime la dernière. Les notes ont glissé d'une tâche à l'autre. Avec <code>key={task.id}</code>, React sait que c'est la tâche <code>a</code> qui a disparu, et retire exactement sa ligne.</p>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>La <code>key</code> est la clé primaire de la ligne. Synchroniser deux listes sur leur position plutôt que sur leur identifiant donne le même genre de catastrophe qu'une mise à jour SQL faite sur le numéro de ligne.</p>
+</aside>
+<ul>
+<li>Une <code>key</code> doit être <strong>unique</strong> parmi ses voisines et <strong>stable</strong> dans le temps : l'identifiant venu de ta base est idéal.</li>
+<li>Jamais <code>Math.random()</code> : une nouvelle clé à chaque rendu détruit et recrée tous les éléments.</li>
+<li>L'index ne convient que pour une liste qui ne sera jamais réordonnée, filtrée, ni modifiée au milieu.</li>
+<li>La <code>key</code> se met sur l'élément renvoyé par <code>map</code>, pas à l'intérieur du composant.</li>
+</ul>
+<p>Astuce utile : changer la <code>key</code> d'un composant force React à le recréer de zéro, état compris.</p>
+<figure class="code"><figcaption>ProfilePage.jsx</figcaption><pre><code class="language-jsx">// Quand userId change, React jette l'ancien formulaire et en crée un neuf (champs vides)
+<EditProfileForm key={userId} userId={userId} /></code></pre></figure>
+
+<h3>Les formulaires contrôlés</h3>
+<p>Dans un champ « contrôlé », c'est l'état React qui décide de ce que le champ affiche. Le champ ne fait que signaler les frappes. Ce qui se passe à chaque touche :</p>
+<ol class="steps">
+  <li><b>Tu tapes « a »</b><span>le navigateur déclenche l'événement <code>change</code> du champ.</span></li>
+  <li><b>onChange(e)</b><span>React appelle ta fonction ; <code>e.target.value</code> contient le texte avec le « a ».</span></li>
+  <li><b>setEmail(...)</b><span>tu enregistres ce texte dans l'état, ce qui demande un rendu.</span></li>
+  <li><b>Nouveau rendu</b><span><code>value={email}</code> affiche le nouveau texte dans le champ.</span></li>
+</ol>
+<figure class="code"><figcaption>EmailField.jsx</figcaption><pre><code class="language-jsx">function EmailField() {
+  const [email, setEmail] = useState("");    // la source de vérité
+
+  return (
+    <input
+      value={email}                           // le champ AFFICHE l'état
+      onChange={e => setEmail(e.target.value)} // et SIGNALE chaque frappe
+    />
+  );
+}</code></pre></figure>
+<p>Tape dans le champ de la démo. Essaie ensuite les deux options : forcer les minuscules montre que c'est toi qui décides de ce qui s'affiche ; oublier <code>onChange</code> montre ce qui arrive quand le champ ne peut plus prévenir l'état.</p>
+
+<div class="demo" id="demo-ctl">
+  <div class="demo-head"><span>Démo · un champ contrôlé</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="ctl-row">
+      <label for="ctl-input">E-mail</label>
+      <input id="ctl-input" type="text" autocomplete="off" spellcheck="false" placeholder="Tape ici">
+    </div>
+    <div class="ctl-row">
+      <label class="pp-check"><input id="ctl-lower" type="checkbox"> forcer les minuscules</label>
+      <label class="pp-check"><input id="ctl-noch" type="checkbox"> oublier onChange</label>
+    </div>
+    <figure class="code compact"><figcaption>le code correspondant</figcaption><pre><code class="language-jsx" data-out="code">const [email, setEmail] = useState("");
+<input value={email} onChange={e => setEmail(e.target.value)} /></code></pre></figure>
+    <p class="demo-status">État <code>email</code> = <strong data-out="state">""</strong> · rendus : <strong data-out="renders">1</strong></p>
+  </div>
+  <div class="log" data-out="log" aria-live="polite"><p class="l-empty">Chaque frappe s'affichera ici.</p></div>
+</div>
+
+<p>Avec plusieurs champs, chaque champ suit le même principe :</p>
+<figure class="code"><figcaption>SignupForm.jsx</figcaption><pre><code class="language-jsx">function SignupForm({ onSubmit }) {
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState("free");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault(); // empêche le rechargement de la page (comportement HTML par défaut)
+    onSubmit({ email, plan, acceptTerms });
+  }
+
+  const isValid = email.includes("@") && acceptTerms; // une valeur dérivée, pas un état
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <label htmlFor="email">E-mail</label>
+      <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+
+      <select value={plan} onChange={e => setPlan(e.target.value)}>
+        <option value="free">Gratuit</option>
+        <option value="pro">Pro</option>
+      </select>
+
+      <label>
+        <input
+          type="checkbox"
+          checked={acceptTerms}                          // pour une case : checked, pas value
+          onChange={e => setAcceptTerms(e.target.checked)}
+        />
+        J'accepte les conditions
+      </label>
+
+      <button type="submit" disabled={!isValid}>Créer le compte</button>
+    </form>
+  );
+}</code></pre></figure>
+<p>Avantage de cette approche : à tout moment, l'état contient exactement ce que l'utilisateur voit. Valider, désactiver le bouton ou envoyer les données devient trivial.</p>
+<aside class="note trap"><p class="label">Piège</p>
+<p>Le message <em>A component is changing an uncontrolled input to be controlled</em> signifie que <code>value</code> valait <code>undefined</code> au départ (par exemple <code>useState()</code> sans valeur). Initialise toujours un champ texte avec <code>""</code>.</p>
+</aside>
+<p>Dans les vrais projets, tu croiseras aussi des bibliothèques de formulaires (react-hook-form, avec zod pour la validation) et, en React 19, <code>&lt;form action={fonction}&gt;</code> avec <code>useActionState</code>. Le principe ci-dessus reste la base pour les comprendre.</p>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>On donne une <strong>fonction</strong> à <code>onClick</code>, jamais le résultat d'un appel ; pour passer un argument, on l'enveloppe : <code>() => remove(id)</code>.</li>
+<li>Conditions : <code>if</code> + <code>return</code>, ternaire, ou <code>&&</code> avec une vraie condition booléenne (attention au 0).</li>
+<li>Listes : <code>map</code> + une <code>key</code> stable et unique, l'identifiant de la donnée, jamais l'index d'une liste qui bouge.</li>
+<li>Formulaire contrôlé : <code>value</code> lit l'état, <code>onChange</code> l'écrit.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice</p>
+<p>Affiche une liste de prénoms et un champ de recherche. La liste se filtre pendant la frappe, sans tenir compte des majuscules. Affiche « Aucun résultat » si rien ne correspond.</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>SearchList.jsx</figcaption><pre><code class="language-jsx">const PEOPLE = [
+  { id: 1, name: "Amina" }, { id: 2, name: "Bastien" },
+  { id: 3, name: "Chloé" }, { id: 4, name: "Diego" },
+];
+
+export default function SearchList() {
+  const [query, setQuery] = useState("");   // champ contrôlé
+
+  // Valeur dérivée : on ne stocke PAS la liste filtrée dans un état
+  const visible = PEOPLE.filter(p =>
+    p.name.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  return (
+    <>
+      <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher" />
+      {visible.length === 0 ? (
+        <p>Aucun résultat</p>
+      ) : (
+        <ul>{visible.map(p => <li key={p.id}>{p.name}</li>)}</ul>
+      )}
+    </>
+  );
+}</code></pre></figure>
+</details>
+</div>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q"><code>count</code> vaut 0. Qu'affiche <code>{count && &lt;Badge /&gt;}</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Rien du tout.</button>
+    <button type="button" data-k="b">Le composant <code>Badge</code>.</button>
+    <button type="button" data-k="c">Le chiffre 0.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong><code>0 && …</code> vaut <code>0</code>, et React affiche les nombres. Écris <code>{count > 0 && &lt;Badge /&gt;}</code>.</p>
+</div>
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Une liste de tâches peut être triée et filtrée. Quelle <code>key</code> choisir ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a"><code>key={task.id}</code></button>
+    <button type="button" data-k="b"><code>key={index}</code></button>
+    <button type="button" data-k="c"><code>key={Math.random()}</code></button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>L'identifiant suit la tâche quelle que soit sa position. L'index change dès que la liste bouge (les états glissent d'une ligne à l'autre), et une valeur aléatoire change à chaque rendu (tout est recréé).</p>
+</div>
+</section><!--/m06-->

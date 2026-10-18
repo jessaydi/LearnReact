@@ -1,0 +1,409 @@
+
+<!-- ===================================================== 15 -->
+<section class="module" id="m15" data-short="Lire un projet, ajouter une feature">
+<header class="module-head"><span class="module-num">15</span><div><p class="module-kicker">Pratique</p><h2>Lire un projet inconnu et y ajouter une fonctionnalité</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Savoir dans quel ordre lire un projet React existant.</li>
+  <li>Suivre une donnée de l'écran jusqu'à l'API.</li>
+  <li>Ajouter une fonctionnalité en choisissant le bon endroit pour l'état.</li>
+</ul></div>
+
+<h3>L'ordre de lecture</h3>
+<ol class="steps">
+  <li><b>package.json</b><span>identifie la pile technique avant de lire une seule ligne de code.</span></li>
+  <li><b>main.jsx</b><span>les providers globaux disent quels services sont disponibles partout.</span></li>
+  <li><b>Les routes</b><span>la carte URL → page : les écrans de l'application.</span></li>
+  <li><b>Une page</b><span>suis une donnée de bout en bout, de l'écran à l'API.</span></li>
+</ol>
+
+<h4>1. Reconnaître la pile dans package.json</h4>
+<div class="table-wrap"><table>
+<thead><tr><th>Dépendance</th><th>Ce qu'elle t'apprend</th></tr></thead>
+<tbody>
+<tr><td><code>react-router</code>, <code>@tanstack/react-router</code></td><td>Routage côté client : URL → page.</td></tr>
+<tr><td><code>next</code></td><td>Framework Next.js : routage par fichiers, rendu serveur, Server Components.</td></tr>
+<tr><td><code>@tanstack/react-query</code></td><td>Données serveur avec cache : cherche des <code>useQuery</code> et <code>useMutation</code>.</td></tr>
+<tr><td><code>zustand</code>, <code>@reduxjs/toolkit</code></td><td>État global hors de React (stores).</td></tr>
+<tr><td><code>react-hook-form</code>, <code>zod</code></td><td>Formulaires et validation de schémas.</td></tr>
+<tr><td><code>axios</code>, <code>ky</code></td><td>Client HTTP à la place de <code>fetch</code>.</td></tr>
+<tr><td><code>tailwindcss</code>, fichiers <code>*.module.css</code>, <code>styled-components</code></td><td>Façon d'écrire les styles.</td></tr>
+<tr><td><code>vitest</code>, <code>@testing-library/react</code>, <code>playwright</code></td><td>Tests unitaires de composants, tests de bout en bout.</td></tr>
+</tbody></table></div>
+
+<h4>2. Lire les providers de main.jsx</h4>
+<figure class="code"><figcaption>src/main.jsx · un projet typique</figcaption><pre><code class="language-jsx">createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>  {/* données serveur (React Query) */}
+      <AuthProvider>                            {/* utilisateur connecté : useAuth() */}
+        <ThemeProvider>                         {/* thème clair / sombre : useTheme() */}
+          <RouterProvider router={router} />    {/* la page affichée dépend de l'URL */}
+        </ThemeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </StrictMode>
+);</code></pre></figure>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>Cette pile de providers joue le rôle de ton <code>Program.cs</code> : l'enregistrement des services et l'ordre du pipeline. En la lisant, tu sais ce que n'importe quel composant peut demander.</p>
+</aside>
+
+<h4>3. Lire les routes</h4>
+<figure class="code"><figcaption>src/router.jsx · avec React Router</figcaption><pre><code class="language-jsx">const router = createBrowserRouter([
+  { path: "/", element: <HomePage /> },
+  { path: "/tasks", element: <TasksPage /> },
+  { path: "/tasks/:taskId", element: <TaskDetailPage /> }, // :taskId = paramètre d'URL
+]);</code></pre></figure>
+<p>C'est l'équivalent de ta table de routes ou de tes contrôleurs : chaque URL pointe vers un composant de page. La syntaxe exacte varie selon la bibliothèque et sa version, mais on la reconnaît toujours.</p>
+
+<h4>4. Suivre une donnée</h4>
+<p>Exemple : « le compteur de tâches de l'en-tête affiche un mauvais nombre ».</p>
+<ol>
+<li><strong>Trouver le composant</strong> : sélecteur des DevTools sur le compteur, ou recherche du texte affiché (« tâches restantes ») dans tout le projet.</li>
+<li><strong>D'où vient la valeur ?</strong> D'une prop : remonte au parent. De <code>useContext</code> ou d'un <code>useXxx()</code> : ouvre le provider ou le hook. D'un <code>useQuery</code> ou d'un <code>fetch</code> : regarde la requête dans l'onglet Réseau.</li>
+<li><strong>Qui la modifie ?</strong> Cherche les appels au setter (<code>setTasks</code>), au <code>dispatch</code> ou à la mutation.</li>
+</ol>
+<aside class="note key"><p class="label">À retenir · la fiche d'identité d'un composant</p>
+<p>Pour comprendre n'importe quel composant, réponds à cinq questions :</p>
+<ol>
+<li>Quelles <strong>props</strong> reçoit-il ?</li>
+<li>Quel <strong>état</strong> possède-t-il ?</li>
+<li>Quels <strong>contextes</strong> ou <strong>hooks</strong> utilise-t-il ?</li>
+<li>Quels <strong>effets</strong> lance-t-il ?</li>
+<li>Qu'<strong>affiche</strong>-t-il, et sous quelles conditions ?</li>
+</ol>
+</aside>
+
+<h3>Ajouter une fonctionnalité, pas à pas</h3>
+<p>Demande : « ajouter une case pour masquer les tâches terminées ». Le composant existant :</p>
+<figure class="code"><figcaption>TaskList.jsx · avant</figcaption><pre><code class="language-jsx">function TaskList({ tasks, onToggle }) {
+  return (
+    <ul>
+      {tasks.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} />)}
+    </ul>
+  );
+}</code></pre></figure>
+<figure class="code"><figcaption>TaskList.jsx · après</figcaption><pre><code class="language-jsx">function TaskList({ tasks, onToggle }) {
+  // 1. Qui a besoin de cette info ? Seulement TaskList → état local
+  const [hideDone, setHideDone] = useState(false);
+
+  // 2. La liste affichée est une valeur dérivée : pas de nouvel état, pas d'effet
+  const visible = hideDone ? tasks.filter(t => !t.done) : tasks;
+
+  return (
+    <>
+      <label>
+        <input
+          type="checkbox"
+          checked={hideDone}
+          onChange={e => setHideDone(e.target.checked)}
+        />
+        Masquer les tâches terminées
+      </label>
+
+      {/* 3. Penser au cas vide */}
+      {visible.length === 0 ? (
+        <p>Rien à afficher.</p>
+      ) : (
+        <ul>
+          {visible.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} />)}
+        </ul>
+      )}
+    </>
+  );
+}</code></pre></figure>
+<p>Et si l'en-tête doit aussi connaître ce réglage ? L'état remonte chez le parent commun. Si le réglage doit survivre au rechargement de la page, on le persiste avec <code>useLocalStorage</code> (module 11), ou dans l'URL (<code>?hideDone=1</code>) pour qu'un lien partagé conserve le filtre.</p>
+
+<h3>Où mettre cet état ?</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Situation</th><th>Choix</th></tr></thead>
+<tbody>
+<tr><td>Un seul composant s'en sert</td><td><code>useState</code> local</td></tr>
+<tr><td>Quelques composants proches</td><td>Remonter l'état au parent commun</td></tr>
+<tr><td>Beaucoup de composants éloignés, valeur peu changeante</td><td>Contexte</td></tr>
+<tr><td>Ce sont des données du serveur</td><td>Un cache de données serveur (React Query), pas une copie dans un état</td></tr>
+<tr><td>Doit survivre au rechargement ou être partageable par lien</td><td>URL (paramètres de recherche) ou <code>localStorage</code></td></tr>
+<tr><td>État global riche et souvent modifié</td><td>Un store (Zustand, Redux Toolkit), si le projet en utilise déjà un</td></tr>
+</tbody></table></div>
+
+<aside class="note key"><p class="label">À retenir · avant de commiter</p>
+<ul>
+<li>La console est propre : aucune erreur, aucun avertissement de <code>key</code>.</li>
+<li>Aucun état n'est modifié sur place.</li>
+<li>Les tableaux de dépendances sont complets et le linter ne signale rien.</li>
+<li>Aucune valeur dérivable n'est stockée dans un état ni calculée dans un effet.</li>
+<li>Les cas limites sont gérés : liste vide, chargement, erreur.</li>
+<li>Tu as suivi les conventions déjà présentes dans le projet.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice</p>
+<p>Reprends le <code>TodoApp</code> du module 05. Découpe-le en trois composants frères sous un même parent : <code>Header</code> (affiche le nombre de tâches restantes), <code>AddTaskForm</code> et <code>TaskList</code>. Ajoute un bouton « Tout cocher » dans <code>Header</code>. Où vit l'état ?</p>
+<details class="solution"><summary>Voir la solution</summary>
+<p>Les trois composants ont besoin des tâches : l'état vit chez leur parent commun, qui passe les données et des callbacks.</p>
+<figure class="code"><figcaption>TodoApp.jsx</figcaption><pre><code class="language-jsx">export default function TodoApp() {
+  const [tasks, setTasks] = useState([]);
+  const remaining = tasks.filter(t => !t.done).length;
+
+  const addTask = title =>
+    setTasks(ts => [...ts, { id: crypto.randomUUID(), title, done: false }]);
+  const toggleTask = id =>
+    setTasks(ts => ts.map(t => (t.id === id ? { ...t, done: !t.done } : t)));
+  const completeAll = () =>
+    setTasks(ts => ts.map(t => ({ ...t, done: true })));
+
+  return (
+    <>
+      <Header remaining={remaining} onCompleteAll={completeAll} />
+      <AddTaskForm onAdd={addTask} />
+      <TaskList tasks={tasks} onToggle={toggleTask} />
+    </>
+  );
+}
+
+function Header({ remaining, onCompleteAll }) {
+  return (
+    <header>
+      <p>{remaining} restante(s)</p>
+      <button onClick={onCompleteAll} disabled={remaining === 0}>Tout cocher</button>
+    </header>
+  );
+}
+
+function AddTaskForm({ onAdd }) {
+  const [draft, setDraft] = useState(""); // le brouillon ne concerne que le formulaire
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (draft.trim()) onAdd(draft.trim());
+    setDraft("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={draft} onChange={e => setDraft(e.target.value)} />
+      <button type="submit">Ajouter</button>
+    </form>
+  );
+}</code></pre></figure>
+<p>Remarque : le brouillon <code>draft</code> reste local à <code>AddTaskForm</code>, car personne d'autre n'en a besoin. Place l'état le plus bas possible.</p>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">La liste des tâches vient de l'API et trois pages l'affichent. Où la garder ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Un <code>useState</code> dans chaque page, chacune avec son <code>fetch</code>.</button>
+    <button type="button" data-k="b">Dans un cache de données serveur comme React Query.</button>
+    <button type="button" data-k="c">Dans une variable globale JavaScript.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Les données serveur ont des besoins propres : cache partagé, rafraîchissement, invalidation après une modification. C'est exactement le rôle de React Query. Plusieurs copies dans des états locaux finissent par diverger.</p>
+</div>
+</section><!--/m15-->
+
+<!-- ===================================================== 16 -->
+<section class="module" id="m16" data-short="Travailler avec l'IA">
+<header class="module-head"><span class="module-num">16</span><div><p class="module-kicker">Méthode</p><h2>L'IA comme copilote, sans perdre le contrôle</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Donner à l'IA le contexte qui produit du bon code React.</li>
+  <li>Relire le code généré avec une grille de signaux d'alerte.</li>
+  <li>Utiliser l'IA pour apprendre, pas seulement pour produire.</li>
+</ul></div>
+
+<p>Considère l'IA comme un développeur junior très rapide et très sûr de lui, y compris quand il se trompe. Elle a appris sur des années de code React, dont beaucoup est ancien. Toi, tu restes l'architecte et le relecteur. Tout ce cours sert à ça : comprendre ce qu'elle écrit.</p>
+
+<h3>Un bon prompt contient</h3>
+<ol>
+<li><strong>Le contexte technique</strong> : versions de React et des bibliothèques (copie les lignes du <code>package.json</code>).</li>
+<li><strong>Les fichiers concernés</strong> : le composant, les hooks et contextes qu'il utilise.</li>
+<li><strong>L'objectif et les contraintes</strong> : « suis le motif existant », « pas de nouvelle dépendance », « garde l'état local ».</li>
+<li><strong>La forme de la réponse</strong> : un plan d'abord, puis de petites modifications expliquées.</li>
+</ol>
+<figure class="code"><figcaption>prompt · comprendre un composant</figcaption><pre><code class="language-text">Projet : React 19 + Vite, React Query 5, React Router.
+Voici le composant TaskBoard.jsx et le hook useTasks.js qu'il utilise.
+
+Explique-moi ce composant comme à un dev backend qui apprend React :
+1. ses props, son état, les contextes et hooks qu'il utilise ;
+2. ce qui déclenche ses re-rendus ;
+3. le rôle de chaque useEffect et ce qui se passerait sans son nettoyage ;
+4. ce qui te semble fragile ou non idiomatique.
+Ne modifie pas le code.</code></pre></figure>
+<figure class="code"><figcaption>prompt · ajouter une fonctionnalité</figcaption><pre><code class="language-text">Projet : React 19 + Vite. Fichiers joints : TasksPage.jsx, TaskList.jsx, TaskItem.jsx.
+
+Je veux ajouter un filtre « masquer les tâches terminées », mémorisé dans l'URL (?hideDone=1).
+Contraintes :
+- pas de nouvelle dépendance ;
+- pas d'état dupliqué ni de useEffect pour calculer la liste filtrée ;
+- respecte le style des composants existants.
+
+D'abord, propose un plan : quel composant possède l'état, quelles props changent.
+Attends ma validation avant d'écrire le code.</code></pre></figure>
+<figure class="code"><figcaption>prompt · débugger</figcaption><pre><code class="language-text">Erreur dans la console : « Maximum update depth exceeded »
+Elle apparaît quand j'ouvre la page /tasks/42.
+Voici le composant concerné et son hook.
+Ce que j'ai déjà vérifié : la réponse de l'API est correcte dans l'onglet Réseau.
+
+Donne-moi les causes les plus probables, de la plus à la moins probable,
+et comment vérifier chacune dans les React DevTools avant de corriger.</code></pre></figure>
+
+<h3>Les signaux d'alerte en relecture</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Tu vois…</th><th>Pourquoi c'est suspect</th></tr></thead>
+<tbody>
+<tr><td>Un <code>useEffect</code> qui fait juste <code>setX(calcul(...))</code></td><td>Valeur dérivée : un rendu de retard et un risque d'incohérence. Calcul direct dans le rendu.</td></tr>
+<tr><td><code>// eslint-disable-next-line react-hooks/exhaustive-deps</code></td><td>Le linter a vu une dépendance manquante et on l'a fait taire : closure périmée probable.</td></tr>
+<tr><td><code>push</code>, <code>sort()</code>, <code>obj.x = …</code> sur un état</td><td>Mutation : l'écran ne se met pas à jour, ou de façon aléatoire.</td></tr>
+<tr><td><code>key={index}</code> ou <code>key={Math.random()}</code></td><td>État qui glisse entre les lignes, ou éléments recréés à chaque rendu.</td></tr>
+<tr><td>Un <code>fetch</code> dans un effet sans nettoyage</td><td>Réponses périmées. Et si le projet utilise déjà React Query, l'IA réinvente la roue.</td></tr>
+<tr><td>Un composant déclaré dans un autre composant</td><td>État perdu et focus perdu à chaque rendu.</td></tr>
+<tr><td><code>useMemo</code> et <code>useCallback</code> partout</td><td>Optimisation sans mesure ; inutile avec le React Compiler.</td></tr>
+<tr><td>Un contexte géant qui contient tout</td><td>Tous les consommateurs se re-rendent à chaque changement.</td></tr>
+<tr><td>Composants en classe, <code>ReactDOM.render</code>, <code>create-react-app</code>, <code>defaultProps</code> sur une fonction, <code>forwardRef</code> dans du code neuf</td><td>APIs anciennes. <code>ReactDOM.render</code> et <code>defaultProps</code> sur les fonctions ont été supprimés en React 19.</td></tr>
+<tr><td>Une fonction ou une option que tu ne trouves nulle part</td><td>API inventée. Vérifie sur react.dev ou dans la doc de la bibliothèque.</td></tr>
+<tr><td>Un composant de plusieurs centaines de lignes qui charge, calcule et affiche</td><td>À découper : custom hook pour la logique, sous-composants pour l'affichage.</td></tr>
+</tbody></table></div>
+
+<aside class="note trap"><p class="label">Piège · sécurité</p>
+<ul>
+<li><strong>Tout le code front est public.</strong> Une clé d'API placée dans le code React, y compris dans une variable <code>VITE_…</code>, finit dans le JavaScript téléchargé par le navigateur. Les secrets restent côté backend.</li>
+<li><strong><code>dangerouslySetInnerHTML</code></strong> avec du contenu venu d'un utilisateur ouvre la porte aux failles XSS.</li>
+<li><strong>Une validation côté front</strong> améliore l'expérience, mais ne protège rien : ton API doit tout revalider.</li>
+</ul>
+</aside>
+
+<h3>Apprendre avec l'IA</h3>
+<ul>
+<li><strong>Explique, puis reformule</strong> : demande une explication, puis réexplique avec tes mots et demande à l'IA de corriger ta compréhension.</li>
+<li><strong>Demande ce qui pourrait casser</strong> : « quels cas limites ce code ne gère-t-il pas ? »</li>
+<li><strong>Fais écrire les tests</strong> : une proposition de tests avec Testing Library révèle souvent des comportements que tu n'avais pas imaginés.</li>
+<li><strong>Avance par petits pas</strong> : un plan, une petite modification, tu lances, tu lis le diff, tu demandes « pourquoi ? » sur chaque ligne obscure, tu commites.</li>
+</ul>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">L'IA propose <code>useEffect(() => setTotal(items.reduce((s, i) => s + i.price, 0)), [items])</code>. Ta réaction ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Remplacer par <code>const total = items.reduce(...)</code> dans le rendu.</button>
+    <button type="button" data-k="b">Accepter : les dépendances sont correctes.</button>
+    <button type="button" data-k="c">Ajouter <code>total</code> dans les dépendances.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Le total se calcule à partir de <code>items</code> : c'est une valeur dérivée. L'effet ajoute un rendu intermédiaire faux et un état de plus à maintenir. Le signal d'alerte n°1 de la grille.</p>
+</div>
+</section><!--/m16-->
+
+<!-- ===================================================== 17 -->
+<section class="module" id="m17" data-short="Antisèche et suite">
+<header class="module-head"><span class="module-num">17</span><div><p class="module-kicker">Pour garder sous la main</p><h2>Antisèche et suite du parcours</h2></div></header>
+
+<h3>Les hooks en un tableau</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Hook</th><th>Rôle</th><th>Forme</th><th>Piège n°1</th></tr></thead>
+<tbody>
+<tr><td><code>useState</code></td><td>Mémoire qui met l'écran à jour</td><td><code>const [v, setV] = useState(init)</code></td><td>Modifier un objet sur place</td></tr>
+<tr><td><code>useEffect</code></td><td>Synchroniser avec l'extérieur</td><td><code>useEffect(() => { …; return cleanup }, [deps])</code></td><td>L'utiliser pour une valeur dérivée</td></tr>
+<tr><td><code>useContext</code></td><td>Lire une valeur partagée</td><td><code>const v = useContext(MyContext)</code></td><td>Provider oublié : valeur par défaut silencieuse</td></tr>
+<tr><td><code>useRef</code></td><td>DOM ou valeur sans re-rendu</td><td><code>const ref = useRef(null)</code></td><td>Lire <code>ref.current</code> pendant le rendu</td></tr>
+<tr><td><code>useReducer</code></td><td>État avec logique riche</td><td><code>const [s, dispatch] = useReducer(fn, init)</code></td><td>Muter l'état dans le reducer</td></tr>
+<tr><td><code>useMemo</code> / <code>useCallback</code></td><td>Mémoïser un calcul / une fonction</td><td><code>useMemo(() => calc, [deps])</code></td><td>En mettre partout sans mesurer</td></tr>
+<tr><td><code>use</code></td><td>Lire une promesse ou un contexte</td><td><code>const data = use(promise)</code></td><td>Promesse recréée à chaque rendu</td></tr>
+<tr><td><code>useId</code></td><td>Identifiant unique stable</td><td><code>const id = useId()</code></td><td>S'en servir comme <code>key</code> de liste</td></tr>
+</tbody></table></div>
+
+<h3>Les gestes du quotidien</h3>
+<figure class="code"><figcaption>antisèche.jsx</figcaption><pre><code class="language-jsx">// --- Mettre à jour l'état sans le modifier
+setUser(u => ({ ...u, name: "Grace" }));                     // modifier un champ
+setItems(xs => [...xs, item]);                               // ajouter
+setItems(xs => xs.filter(x => x.id !== id));                 // supprimer
+setItems(xs => xs.map(x => (x.id === id ? { ...x, done: !x.done } : x))); // modifier un élément
+setOpen(o => !o);                                            // basculer
+
+// --- Valeur dérivée : pas d'état, pas d'effet
+const visible = items.filter(x => x.title.includes(query));
+
+// --- Affichage conditionnel et liste
+{isLoading ? <Spinner /> : <List />}
+{items.length > 0 && <Count n={items.length} />}
+{items.map(x => <Row key={x.id} item={x} />)}
+
+// --- Effet avec nettoyage
+useEffect(() => {
+  const id = setInterval(tick, 1000);
+  return () => clearInterval(id);
+}, []);
+
+// --- Contexte + hook garde-fou
+const Ctx = createContext(null);
+export function useThing() {
+  const v = useContext(Ctx);
+  if (v === null) throw new Error("useThing hors de son Provider");
+  return v;
+}
+
+// --- Chargement + erreur déclaratifs
+<ErrorBoundary FallbackComponent={ErrorFallback}>
+  <Suspense fallback={<Spinner />}>
+    <Profile />
+  </Suspense>
+</ErrorBoundary></code></pre></figure>
+
+<h3>Petit glossaire</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Français</th><th>Anglais (ce que tu liras dans la doc)</th></tr></thead>
+<tbody>
+<tr><td>rendu, re-rendu</td><td>render, re-render</td></tr>
+<tr><td>montage, démontage</td><td>mount, unmount</td></tr>
+<tr><td>état, valeur dérivée</td><td>state, derived state</td></tr>
+<tr><td>remonter l'état</td><td>lifting state up</td></tr>
+<tr><td>fournisseur, consommateur</td><td>provider, consumer</td></tr>
+<tr><td>tableau de dépendances, nettoyage</td><td>dependency array, cleanup</td></tr>
+<tr><td>contenu de secours</td><td>fallback</td></tr>
+<tr><td>champ contrôlé</td><td>controlled input</td></tr>
+<tr><td>closure périmée</td><td>stale closure</td></tr>
+<tr><td>découpage du code</td><td>code splitting</td></tr>
+</tbody></table></div>
+
+<h3>La suite du parcours</h3>
+<ol class="steps three">
+  <li><b>Un projet fil rouge</b><span>TaskFlow : une app de tâches qui mobilise chaque module de ce cours (détails ci-dessous).</span></li>
+  <li><b>TypeScript</b><span>typer props, état et événements. Tes réflexes de C# t'y aideront beaucoup.</span></li>
+  <li><b>React Query</b><span>les données serveur : cache, rafraîchissement, mutations. Il remplacera tes <code>fetch</code> dans des effets.</span></li>
+  <li><b>Le routage</b><span>React Router ou TanStack Router : pages, paramètres d'URL, navigation.</span></li>
+  <li><b>Formulaires et tests</b><span>react-hook-form + zod, puis Vitest et Testing Library.</span></li>
+  <li><b>Un framework</b><span>Next.js ou React Router en mode framework : rendu serveur et Server Components.</span></li>
+</ol>
+
+<h4>Le projet TaskFlow</h4>
+<p>Construis-le dans ton bac à sable Vite, et branche-le sur une petite API FastAPI ou ASP.NET que tu écris toi-même. Tu verras les deux côtés du contrat.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Fonctionnalité</th><th>Modules mobilisés</th></tr></thead>
+<tbody>
+<tr><td>Liste, ajout, case à cocher, suppression</td><td>03, 04, 05</td></tr>
+<tr><td>Recherche et filtre « masquer terminées »</td><td>06, 07</td></tr>
+<tr><td>Chargement et enregistrement via ton API</td><td>08</td></tr>
+<tr><td>Persistance des préférences avec <code>useLocalStorage</code></td><td>11</td></tr>
+<tr><td>Thème clair / sombre et utilisateur connecté via contextes</td><td>10</td></tr>
+<tr><td>Page de statistiques chargée avec <code>lazy</code></td><td>12</td></tr>
+<tr><td>Une error boundary par widget</td><td>13</td></tr>
+<tr><td>Une séance de débogage volontaire avec les DevTools</td><td>14</td></tr>
+</tbody></table></div>
+
+<h3>Ressources officielles</h3>
+<ul>
+<li><a href="https://react.dev/learn" target="_blank" rel="noopener">react.dev/learn</a> : le tutoriel officiel. Lis en priorité « Thinking in React », « You Might Not Need an Effect » et la section « Escape Hatches ».</li>
+<li><a href="https://react.dev/reference/react" target="_blank" rel="noopener">react.dev/reference</a> : la référence de chaque hook et composant.</li>
+<li><a href="https://github.com/bvaughn/react-error-boundary" target="_blank" rel="noopener">react-error-boundary</a> : la bibliothèque du module 13.</li>
+</ul>
+
+<h3>Sources utilisées pour ce cours</h3>
+<ul class="sources">
+<li><a href="https://react.dev/versions" target="_blank" rel="noopener">React Versions</a> · react.dev (version 19.3 du 9 septembre 2026)</li>
+<li><a href="https://react.dev/blog/2026/09/09/react-19-3" target="_blank" rel="noopener">React 19.3</a> · blog React</li>
+<li><a href="https://react.dev/blog/2025/10/07/react-compiler-1" target="_blank" rel="noopener">React Compiler v1.0</a> · blog React</li>
+<li><a href="https://react.dev/blog/2025/02/14/sunsetting-create-react-app" target="_blank" rel="noopener">Sunsetting Create React App</a> · blog React</li>
+<li><a href="https://react.dev/reference/react/Component" target="_blank" rel="noopener">Component (error boundaries)</a> · référence React</li>
+</ul>
+</section><!--/m17-->
+
+<footer class="foot">
+  <p>Cours rédigé le 18 octobre 2026, à jour pour React 19.3. Ta progression (modules marqués comme lus) est enregistrée dans ce navigateur uniquement.</p>
+</footer>
+
+</main>
+</div>

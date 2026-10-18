@@ -1,0 +1,511 @@
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = false;
+  try { reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+  function hl(el) { try { if (window.Prism && Prism.highlightElement) Prism.highlightElement(el); } catch (e) {} }
+  function flash(el) { el.classList.remove("is-flash"); void el.offsetWidth; el.classList.add("is-flash"); }
+  function logger(box, max) {
+    return {
+      clear: function () { box.innerHTML = ""; },
+      add: function (cls, text) {
+        var empty = box.querySelector(".l-empty"); if (empty) empty.remove();
+        var p = document.createElement("p"); p.className = cls; p.textContent = text;
+        box.appendChild(p);
+        if (max) { while (box.children.length > max) box.removeChild(box.firstChild); }
+        box.scrollTop = box.scrollHeight;
+      }
+    };
+  }
+  function outIn(root) { return function (k) { return root.querySelector('[data-out="' + k + '"]'); }; }
+  function setSeg(root, mode) {
+    root.querySelectorAll(".seg [data-mode]").forEach(function (b) {
+      b.setAttribute("aria-checked", b.getAttribute("data-mode") === mode ? "true" : "false");
+    });
+  }
+  function clone(list) { return list.map(function (t) { return Object.assign({}, t); }); }
+
+  /* ---------- Onglets génériques (explorateurs, JSX en 4 étapes) ---------- */
+  document.querySelectorAll("[data-picker]").forEach(function (root) {
+    var tabs = root.querySelectorAll("[data-pick]");
+    var panels = root.querySelectorAll("[data-panel]");
+    function show(id) {
+      tabs.forEach(function (t) { t.setAttribute("aria-selected", t.getAttribute("data-pick") === id ? "true" : "false"); });
+      panels.forEach(function (p) { p.hidden = p.getAttribute("data-panel") !== id; });
+    }
+    tabs.forEach(function (t) { t.addEventListener("click", function () { show(t.getAttribute("data-pick")); }); });
+  });
+
+  /* ---------- Module 00 : TaskFlow, React contre « à la main » ---------- */
+  (function () {
+    var root = document.getElementById("demo-tf"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 8);
+    var INITIAL = [
+      { id: 1, title: "Lire le module 5", done: false },
+      { id: 2, title: "Installer Vite", done: false },
+      { id: 3, title: "Tester useEffect", done: false }
+    ];
+    var tasks = clone(INITIAL), mode = "react";
+    function remainingOf(list) { return list.filter(function (t) { return !t.done; }).length; }
+    function label(n) { return n + (n > 1 ? " tâches restantes" : " tâche restante"); }
+    function dataText() {
+      return "[\n" + tasks.map(function (t) {
+        return '  { id: ' + t.id + ', title: "' + t.title + '", done: ' + t.done + ' }';
+      }).join(",\n") + "\n]";
+    }
+    function li(id) { return root.querySelector('.tf-list li[data-id="' + id + '"]'); }
+    function renderAll() {
+      var n = remainingOf(tasks);
+      out("count").textContent = label(n);
+      out("badge").textContent = n;
+      out("badge").classList.remove("is-stale");
+      tasks.forEach(function (t) {
+        var row = li(t.id);
+        row.classList.toggle("done", t.done);
+        row.querySelector("input").checked = t.done;
+      });
+      out("data").textContent = dataText();
+    }
+    function intro() {
+      out("msg").textContent = mode === "react"
+        ? "Mode « Façon React » : coche une tâche, les trois zones restent toujours d'accord avec les données."
+        : "Mode « JavaScript à la main » : le code met à jour chaque zone une par une. Coche une tâche et surveille la pastille.";
+    }
+    function reset() {
+      tasks = clone(INITIAL); renderAll(); log.clear();
+      log.add("l-empty", "Ici s'affichera ce que le code fait à chaque clic.");
+      intro();
+    }
+    root.querySelector(".tf-list").addEventListener("change", function (e) {
+      var input = e.target; if (!input || input.type !== "checkbox") return;
+      var id = Number(input.closest("li").getAttribute("data-id"));
+      var checked = input.checked;
+      if (mode === "react") {
+        tasks = tasks.map(function (t) { return t.id === id ? Object.assign({}, t, { done: checked }) : t; });
+        var n = remainingOf(tasks);
+        log.add("l-state", "setTasks(...) : la tâche " + id + " est " + (checked ? "terminée" : "à faire") + ". On n'a modifié que les données.");
+        renderAll();
+        log.add("l-effect", "React recalcule l'écran entier : en-tête « " + label(n) + " », pastille « " + n + " », ligne " + id + (checked ? " barrée." : " normale."));
+        out("msg").textContent = "Les trois zones affichent " + n + " : elles sont toutes calculées à partir des mêmes données.";
+      } else {
+        var task = tasks.filter(function (t) { return t.id === id; })[0];
+        task.done = checked;
+        out("data").textContent = dataText();
+        li(id).classList.toggle("done", checked);
+        log.add("l-let", 'ligne.classList.toggle("done") → la ligne ' + id + " est mise à jour.");
+        var m = remainingOf(tasks);
+        out("count").textContent = label(m);
+        log.add("l-let", 'compteur.textContent = "' + label(m) + '" → l\'en-tête est mis à jour.');
+        var shown = Number(out("badge").textContent);
+        log.add("l-warn", "La pastille ? Oubliée par le code : elle affiche toujours " + shown + ".");
+        out("badge").classList.toggle("is-stale", shown !== m);
+        out("msg").textContent = shown !== m
+          ? "Les données disent " + m + ", l'en-tête dit " + m + ", mais la pastille affiche " + shown + " : l'écran se contredit."
+          : "Par chance, la pastille tombe juste… pour l'instant.";
+      }
+    });
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]");
+      if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); reset(); return; }
+      if (e.target.closest('[data-act="reset"]')) reset();
+    });
+    reset();
+  })();
+
+  /* ---------- Module 00 : le cycle pas à pas ---------- */
+  (function () {
+    var root = document.getElementById("demo-cycle"); if (!root) return;
+    var out = outIn(root);
+    var FRAMES = [
+      [1, "Premier affichage. Les données de départ : 3 tâches, aucune cochée. Tout part de là."],
+      [2, "React appelle tes composants. Ils calculent remaining = 3 et décrivent l'écran voulu : en-tête « 3 tâches restantes », pastille « 3 », trois lignes non cochées."],
+      [3, "Rien à comparer : c'est le tout premier affichage. React note que tout est nouveau."],
+      [4, "React crée les éléments du DOM : le titre, le paragraphe, la liste et ses trois lignes."],
+      [5, "Le navigateur dessine l'écran à partir du DOM. L'utilisateur voit TaskFlow."],
+      [6, "L'utilisateur coche « Installer Vite ». React appelle ton gestionnaire toggle(2), qui appelle setTasks(...) avec une nouvelle liste où la tâche 2 est terminée."],
+      [1, "Nouvelles données : la tâche 2 est terminée. C'est la seule chose que ton code a modifiée."],
+      [2, "React rappelle tes composants avec ces données. Ils décrivent à nouveau l'écran entier, comme la première fois, mais remaining vaut maintenant 2."],
+      [3, "React compare la nouvelle description avec l'ancienne et trouve 3 différences : la case de la tâche 2, le texte « 2 tâches restantes » et la pastille « 2 »."],
+      [4, "React modifie uniquement ces 3 endroits du DOM. Le titre et les autres lignes ne sont pas touchés."],
+      [5, "Le navigateur redessine. Les trois zones sont à jour, sans que tu aies écrit une ligne de code pour chacune."],
+      [6, "Le cycle attend maintenant la prochaine action de l'utilisateur."]
+    ];
+    var pos = -1;
+    var nextBtn = root.querySelector('[data-act="next"]');
+    var prevBtn = root.querySelector('[data-act="prev"]');
+    function show() {
+      root.querySelectorAll(".cycle-steps li").forEach(function (li) {
+        li.classList.toggle("is-active", pos >= 0 && Number(li.getAttribute("data-step")) === FRAMES[pos][0]);
+      });
+      if (pos < 0) {
+        out("detail").textContent = "Clique sur « Suivre un clic pas à pas » : on va suivre le premier affichage de TaskFlow, puis ce qui se passe quand l'utilisateur coche « Installer Vite ».";
+        out("pos").textContent = "";
+      } else {
+        out("detail").textContent = FRAMES[pos][1];
+        out("pos").textContent = "Étape " + (pos + 1) + " / " + FRAMES.length + (pos < 6 ? " · premier affichage" : " · après le clic");
+      }
+      nextBtn.textContent = pos < 0 ? "Suivre un clic pas à pas" : (pos >= FRAMES.length - 1 ? "Terminé" : "Étape suivante");
+      nextBtn.disabled = pos >= FRAMES.length - 1;
+      prevBtn.disabled = pos <= 0;
+    }
+    root.addEventListener("click", function (e) {
+      var t = e.target.closest("[data-act]"); if (!t) return;
+      var act = t.getAttribute("data-act");
+      if (act === "next" && pos < FRAMES.length - 1) pos++;
+      else if (act === "prev" && pos > 0) pos--;
+      else if (act === "restart") pos = -1;
+      show();
+    });
+    show();
+  })();
+
+  /* ---------- Module 04 : les props d'Avatar ---------- */
+  (function () {
+    var root = document.getElementById("demo-props"); if (!root) return;
+    var out = outIn(root);
+    var nameIn = root.querySelector("#pp-name"), sizeIn = root.querySelector("#pp-size"), onlineIn = root.querySelector("#pp-online");
+    function q(s) { return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"'); }
+    function update() {
+      var name = nameIn.value, size = Number(sizeIn.value), online = onlineIn.checked;
+      var av = out("avatar");
+      av.style.width = size + "px"; av.style.height = size + "px";
+      av.style.fontSize = Math.round(size * 0.42) + "px";
+      av.textContent = name.trim() ? name.trim()[0].toUpperCase() : "?";
+      av.classList.toggle("is-online", online);
+      out("sizeval").textContent = size;
+      out("jsx").textContent = '<Avatar name="' + q(name) + '" size={' + size + "}" + (online ? " online" : "") + " />";
+      out("call").textContent = 'Avatar({ name: "' + q(name) + '", size: ' + size + ", online: " + online + " })";
+    }
+    [nameIn, sizeIn, onlineIn].forEach(function (el) { el.addEventListener("input", update); el.addEventListener("change", update); });
+    update();
+  })();
+
+  /* ---------- Module 04 : le trajet d'un clic ---------- */
+  (function () {
+    var root = document.getElementById("demo-flow"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 12);
+    var INITIAL = [{ id: 1, title: "Lire", done: false }, { id: 2, title: "Coder", done: false }, { id: 3, title: "Tester", done: false }];
+    var tasks = clone(INITIAL), busy = false, timers = [];
+    function stateText() {
+      return "tasks = [\n" + tasks.map(function (t) { return '  { id: ' + t.id + ', title: "' + t.title + '", done: ' + t.done + ' }'; }).join(",\n") + "\n]";
+    }
+    function kid(id) { return root.querySelector('.fl-kid[data-id="' + id + '"]'); }
+    function sync() {
+      out("state").textContent = stateText();
+      tasks.forEach(function (t) { kid(t.id).querySelector("input").checked = t.done; });
+    }
+    function later(fn, ms) { if (reduceMotion) { fn(); } else { timers.push(setTimeout(fn, ms)); } }
+    root.querySelector(".fl-kids").addEventListener("change", function (e) {
+      var input = e.target; if (!input || input.type !== "checkbox") return;
+      var k = input.closest(".fl-kid"); var id = Number(k.getAttribute("data-id"));
+      var task = tasks.filter(function (t) { return t.id === id; })[0];
+      input.checked = task.done; // champ contrôlé : seul l'état décide
+      if (busy) return;
+      busy = true;
+      flash(k);
+      log.add("l-let", "1 · TaskItem « " + task.title + " » appelle onToggle(" + id + "). Il ne modifie rien lui-même.");
+      later(function () {
+        tasks = tasks.map(function (t) { return t.id === id ? Object.assign({}, t, { done: !t.done }) : t; });
+        out("state").textContent = stateText();
+        flash(out("parent"));
+        log.add("l-state", "2 · TaskList exécute handleToggle(" + id + ") → setTasks(nouveau tableau). Son état change.");
+      }, 550);
+      later(function () {
+        root.querySelectorAll(".fl-kid").forEach(flash);
+        log.add("l-render", "3 · TaskList se re-rend et repasse une prop « task » à chacun de ses TaskItem.");
+      }, 1100);
+      later(function () {
+        sync();
+        var t = tasks.filter(function (x) { return x.id === id; })[0];
+        log.add("l-effect", "4 · TaskItem « " + t.title + " » reçoit task.done = " + t.done + " et affiche la case " + (t.done ? "cochée." : "décochée."));
+        busy = false;
+      }, 1650);
+    });
+    root.querySelector('[data-act="reset"]').addEventListener("click", function () {
+      timers.forEach(clearTimeout); timers = []; busy = false;
+      tasks = clone(INITIAL); sync(); log.clear();
+      log.add("l-empty", "Coche une tâche : chaque étape du trajet s'affichera ici.");
+    });
+    sync();
+  })();
+
+  /* ---------- Module 05 : ce que React voit (objets) ---------- */
+  (function () {
+    var root = document.getElementById("demo-mem"); if (!root) return;
+    var out = outIn(root);
+    var mode = "mutate", done = false;
+    var CODE = {
+      mutate: 'user.name = "Grace";   // on modifie l\'objet existant (n°1)\nsetUser(user);         // on redonne la même adresse',
+      copy: 'const copie = { ...user, name: "Grace" }; // un nouvel objet (n°2)\nsetUser(copie);                           // une nouvelle adresse'
+    };
+    function v(label, cls, ptr) { return '<span class="mem-var">' + label + ' <i class="ptr ' + cls + '">→ objet ' + ptr + "</i></span>"; }
+    function box(cls, title, name) { return '<div class="mem-box ' + cls + '"><b>' + title + '</b>{ name: "' + name + '", email: "ada@mail.com" }</div>'; }
+    function render() {
+      var vars = v("état actuel (user)", "p1", "n°1");
+      var boxes, screen = "Ada", stale = false, verdict = "Clique sur « Exécuter le clic » pour lancer le scénario.", vcls = "";
+      if (!done) {
+        boxes = box("p1", "objet n°1", "Ada");
+      } else if (mode === "mutate") {
+        vars += v("valeur passée à setUser", "p1", "n°1");
+        boxes = box("p1", "objet n°1", "Grace");
+        stale = true;
+        verdict = "React compare la valeur reçue (objet n°1) à l'état actuel (objet n°1) : même adresse. Pour lui, rien n'a changé : pas de nouveau rendu. L'objet contient pourtant « Grace » : l'écran ment.";
+        vcls = "ko";
+      } else {
+        vars += v("valeur passée à setUser", "p2", "n°2");
+        boxes = box("p1", "objet n°1", "Ada") + box("p2", "objet n°2 (la copie)", "Grace");
+        screen = "Grace";
+        verdict = "React compare l'objet n°2 à l'objet n°1 : adresses différentes. Quelque chose a changé : il refait le rendu, et l'écran affiche « Grace ».";
+        vcls = "ok";
+      }
+      out("vars").innerHTML = vars;
+      out("boxes").innerHTML = boxes;
+      var s = out("screen"); s.textContent = "Bonjour, " + screen; s.classList.toggle("is-stale", stale);
+      var vd = out("verdict"); vd.textContent = verdict; vd.className = "mem-verdict " + vcls;
+    }
+    function setMode(m) {
+      mode = m; done = false; setSeg(root, m);
+      var c = out("code"); c.textContent = CODE[m]; hl(c);
+      render();
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { setMode(m.getAttribute("data-mode")); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      if (a.getAttribute("data-act") === "run") { done = true; render(); }
+      else if (a.getAttribute("data-act") === "reset") { setMode(mode); }
+    });
+    setMode("mutate");
+  })();
+
+  /* ---------- Module 05 : le laboratoire des tableaux ---------- */
+  (function () {
+    var root = document.getElementById("demo-arr"); if (!root) return;
+    var out = outIn(root);
+    var INITIAL = [{ id: 1, title: "Lire", done: false }, { id: 2, title: "Coder", done: false }, { id: 3, title: "Tester", done: false }];
+    var data, screen, nextId;
+    function same(a, b) { return a && b && a.id === b.id && a.done === b.done && a.title === b.title; }
+    function byId(list, id) { return list.filter(function (t) { return t.id === id; })[0]; }
+    function mismatch() { return JSON.stringify(data) !== JSON.stringify(screen); }
+    function draw(listEl, list, other) {
+      listEl.innerHTML = "";
+      if (!list.length) { var e = document.createElement("li"); e.textContent = "(liste vide)"; listEl.appendChild(e); return; }
+      list.forEach(function (t) {
+        var li = document.createElement("li");
+        var b = document.createElement("span"); b.className = "box" + (t.done ? " on" : "");
+        li.appendChild(b);
+        li.appendChild(document.createTextNode("#" + t.id + " " + t.title));
+        if (!same(t, byId(other, t.id))) li.classList.add("is-diff");
+        listEl.appendChild(li);
+      });
+    }
+    function render() { draw(out("data"), data, screen); draw(out("screen"), screen, data); }
+    function verdict(text, cls) { var v = out("verdict"); v.textContent = text; v.className = "mem-verdict " + (cls || ""); }
+    function code(text) { var c = out("code"); c.textContent = text; hl(c); }
+    function reset() {
+      data = clone(INITIAL); screen = clone(INITIAL); nextId = 4;
+      code("// clique sur un bouton"); render();
+      verdict("Les deux colonnes sont identiques : l'écran est d'accord avec les données.");
+    }
+    root.addEventListener("click", function (e) {
+      var opBtn = e.target.closest("[data-op]");
+      var act = e.target.closest("[data-act]");
+      if (act && act.getAttribute("data-act") === "reset") { reset(); return; }
+      if (act && act.getAttribute("data-act") === "other") {
+        var was = mismatch();
+        screen = clone(data); render();
+        code("// un autre état du composant change (par exemple un filtre) → nouveau rendu");
+        verdict(was
+          ? "Un autre état a provoqué un rendu : les modifications faites sur place apparaissent d'un coup, sans lien avec le clic qui les a causées."
+          : "Rendu effectué : il n'y avait rien de nouveau à afficher.", was ? "ko" : "");
+        return;
+      }
+      if (!opBtn) return;
+      var op = opBtn.getAttribute("data-op");
+      var needsItem = op === "splice" || op === "mut" || op === "filter" || op === "map";
+      if (needsItem && !data.length) { verdict("La liste est vide : ajoute une tâche ou réinitialise."); return; }
+      var wasMismatch = mismatch();
+      var firstId = data.length ? data[0].id : null;
+      var n = nextId;
+      var mutating = op === "push" || op === "splice" || op === "mut";
+      if (op === "push") {
+        data.push({ id: n, title: "Tâche " + n, done: false }); nextId++;
+        code('tasks.push({ id: ' + n + ', title: "Tâche ' + n + '", done: false });\nsetTasks(tasks); // le même tableau');
+      } else if (op === "splice") {
+        data.splice(0, 1);
+        code("tasks.splice(0, 1);\nsetTasks(tasks); // le même tableau");
+      } else if (op === "mut") {
+        data[0].done = !data[0].done;
+        code("tasks[0].done = !tasks[0].done;\nsetTasks(tasks); // le même tableau");
+      } else if (op === "spread") {
+        data = data.concat([{ id: n, title: "Tâche " + n, done: false }]); nextId++;
+        code('setTasks([...tasks, { id: ' + n + ', title: "Tâche ' + n + '", done: false }]);');
+      } else if (op === "filter") {
+        data = data.filter(function (t) { return t.id !== firstId; });
+        code("setTasks(tasks.filter(t => t.id !== " + firstId + "));");
+      } else if (op === "map") {
+        data = data.map(function (t) { return t.id === firstId ? Object.assign({}, t, { done: !t.done }) : t; });
+        code("setTasks(tasks.map(t => t.id === " + firstId + " ? { ...t, done: !t.done } : t));");
+      }
+      if (mutating) {
+        render();
+        verdict("Même tableau, même adresse : React ne refait pas le rendu. Les données ont changé, l'écran non : les deux colonnes ne sont plus d'accord.", "ko");
+      } else {
+        screen = clone(data); render();
+        verdict("Nouveau tableau, nouvelle adresse : React refait le rendu et l'écran suit les données." +
+          (wasMismatch ? " Au passage, les anciennes modifications invisibles apparaissent aussi." : ""), "ok");
+      }
+    });
+    reset();
+  })();
+
+  /* ---------- Module 06 : quelle branche s'affiche ? ---------- */
+  (function () {
+    var root = document.getElementById("demo-cond"); if (!root) return;
+    var out = outIn(root);
+    var loading = root.querySelector("#cs-loading"), error = root.querySelector("#cs-error"), count = root.querySelector("#cs-count");
+    var TITLES = ["Lire le module 5", "Installer Vite", "Tester useEffect"];
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+    function update() {
+      var n = Number(count.value);
+      out("count").textContent = n;
+      var lines = root.querySelectorAll(".ln");
+      lines.forEach(function (l) { l.classList.remove("hit", "hit-bad"); });
+      function hit(i, bad) { lines[i - 1].classList.add(bad ? "hit-bad" : "hit"); }
+      var pv = out("preview"); pv.innerHTML = "";
+      var explain;
+      if (loading.checked) {
+        hit(1);
+        pv.appendChild(el("p", "spin", "Chargement…"));
+        explain = "isLoading est vrai : la ligne 1 renvoie le Spinner. Le composant s'arrête là ; la suite n'est jamais lue.";
+      } else if (error.checked) {
+        hit(2);
+        pv.appendChild(el("p", "err-msg", "Erreur : le serveur ne répond pas"));
+        explain = "isLoading est faux et error existe : la ligne 2 renvoie le message d'erreur. Le return principal n'est jamais atteint.";
+      } else {
+        [3, 4, 5, 6, 8, 9].forEach(function (i) { if (i !== 6 || n > 0) hit(i); });
+        if (n === 0) {
+          pv.appendChild(el("p", null, "Aucune tâche pour l'instant."));
+        } else {
+          var ul = el("ul");
+          TITLES.slice(0, n).forEach(function (t) { ul.appendChild(el("li", null, t)); });
+          pv.appendChild(ul);
+          pv.appendChild(el("p", null, n + " tâches"));
+        }
+        if (n > 0) {
+          hit(7);
+          pv.appendChild(el("p", null, "Version piégée"));
+          explain = "Liste non vide : la ligne 5 choisit TaskList, et les lignes 6 et 7 affichent leur paragraphe.";
+        } else {
+          hit(7, true);
+          var p = el("p"); p.appendChild(el("span", "zero", "0")); p.appendChild(document.createTextNode("  ← affiché par la ligne 7"));
+          pv.appendChild(p);
+          explain = "Liste vide : la ligne 5 choisit EmptyState et la ligne 6 n'affiche rien (false). Mais la ligne 7 affiche un 0 : tasks.length vaut 0, et 0 && … vaut 0.";
+        }
+      }
+      out("explain").textContent = explain;
+    }
+    [loading, error, count].forEach(function (c) { c.addEventListener("input", update); c.addEventListener("change", update); });
+    update();
+  })();
+
+  /* ---------- Module 06 : l'index comme key ---------- */
+  (function () {
+    var root = document.getElementById("demo-keys"); if (!root) return;
+    var out = outIn(root);
+    var BASE = [
+      { id: "a", title: "Acheter du café", note: "pour lundi" },
+      { id: "b", title: "Appeler le client", note: "urgent" },
+      { id: "c", title: "Relire la PR", note: "à déléguer" }
+    ];
+    var mode = "index", data = [], rows = [];
+    function tag(key) { return mode === "index" ? "key = " + key : 'key = "' + key + '"'; }
+    function verdict(text, cls) { var v = out("verdict"); v.textContent = text; v.className = "mem-verdict " + (cls || ""); }
+    function build() {
+      var list = out("list"); list.innerHTML = ""; data = clone(BASE);
+      rows = data.map(function (t, i) {
+        var key = mode === "index" ? i : t.id;
+        var li = document.createElement("li");
+        var tg = document.createElement("span"); tg.className = "key-tag"; tg.textContent = tag(key);
+        var ti = document.createElement("span"); ti.className = "key-title"; ti.textContent = t.title;
+        var inp = document.createElement("input"); inp.type = "text"; inp.value = t.note; inp.setAttribute("aria-label", "Note");
+        li.appendChild(tg); li.appendChild(ti); li.appendChild(inp); list.appendChild(li);
+        return { key: key, li: li, title: ti, input: inp };
+      });
+      verdict("Avant de supprimer, regarde quelle note accompagne chaque tâche.");
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]");
+      if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); build(); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      var act = a.getAttribute("data-act");
+      if (act === "reset") { build(); return; }
+      if (act !== "delete") return;
+      if (!data.length) { verdict("Plus rien à supprimer : réinitialise."); return; }
+      var removed = data[0];
+      data = data.slice(1);
+      if (mode === "id") {
+        var idx = -1;
+        rows.forEach(function (r, i) { if (r.key === removed.id) idx = i; });
+        if (idx >= 0) { rows[idx].li.remove(); rows.splice(idx, 1); }
+        verdict('React a retiré la ligne key = "' + removed.id + '" (« ' + removed.title + " ») et rien d'autre. Chaque note est restée avec sa tâche.", "ok");
+      } else {
+        rows.forEach(function (r, i) {
+          if (i < data.length && r.title.textContent !== data[i].title) { r.title.textContent = data[i].title; flash(r.li); }
+        });
+        var last = rows.pop(); if (last) last.li.remove();
+        if (rows.length) {
+          verdict("React a gardé les lignes key = 0" + (rows.length > 1 ? " et key = 1" : "") + ", a seulement changé leurs titres, puis a supprimé la dernière ligne. Résultat : « " +
+            rows[0].title.textContent + " » affiche maintenant la note « " + rows[0].input.value + " », qui appartenait à « " + removed.title + " ».", "ko");
+        } else {
+          verdict("La liste est vide. Réinitialise pour recommencer, ou essaie l'autre mode.");
+        }
+      }
+    });
+    build();
+  })();
+
+  /* ---------- Module 06 : un champ contrôlé ---------- */
+  (function () {
+    var root = document.getElementById("demo-ctl"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 8);
+    var input = root.querySelector("#ctl-input"), lower = root.querySelector("#ctl-lower"), noch = root.querySelector("#ctl-noch");
+    var state = "", renders = 1;
+    function code() {
+      var head = 'const [email, setEmail] = useState("");\n';
+      var c = out("code");
+      if (noch.checked) c.textContent = head + "<input value={email} />  // pas de onChange : rien ne met l'état à jour";
+      else if (lower.checked) c.textContent = head + "<input value={email} onChange={e => setEmail(e.target.value.toLowerCase())} />";
+      else c.textContent = head + "<input value={email} onChange={e => setEmail(e.target.value)} />";
+      hl(c);
+    }
+    function status() { out("state").textContent = JSON.stringify(state); out("renders").textContent = renders; }
+    input.addEventListener("input", function () {
+      var raw = input.value;
+      if (noch.checked) {
+        input.value = state;
+        log.add("l-warn", "Frappe annulée : sans onChange, l'état reste " + JSON.stringify(state) + " et React remet cette valeur dans le champ.");
+        return;
+      }
+      var next = lower.checked ? raw.toLowerCase() : raw;
+      state = next; renders++;
+      if (input.value !== next) {
+        var pos = input.selectionStart; input.value = next;
+        try { input.setSelectionRange(pos, pos); } catch (e) {}
+      }
+      log.add("l-state", "frappe → onChange → setEmail(" + JSON.stringify(next) + ") → rendu n°" + renders + " → le champ affiche " + JSON.stringify(next));
+      status();
+    });
+    [lower, noch].forEach(function (c) { c.addEventListener("change", code); });
+    root.querySelector('[data-act="reset"]').addEventListener("click", function () {
+      state = ""; renders = 1; input.value = ""; lower.checked = false; noch.checked = false;
+      log.clear(); log.add("l-empty", "Chaque frappe s'affichera ici."); code(); status();
+    });
+    code(); status();
+  })();
+})();
+</script>

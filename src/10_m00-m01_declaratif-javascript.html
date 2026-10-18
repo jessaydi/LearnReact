@@ -1,0 +1,723 @@
+<div class="shell">
+<nav class="sidebar" aria-label="Sommaire du cours">
+  <p class="side-kicker">Cours · React 19</p>
+  <p class="side-title">React pour devs backend</p>
+  <p class="side-sub">Les fondamentaux, de JSX aux error boundaries, expliqués depuis Python et C#.</p>
+  <div class="progress">
+    <div class="progress-bar"><span id="progress-fill"></span></div>
+    <p class="progress-text" aria-live="polite"><span id="progress-count">0</span> / <span id="progress-total">18</span> modules lus</p>
+  </div>
+  <details class="toc" id="toc" open>
+    <summary>Sommaire du cours</summary>
+    <ol class="toc-list">
+<!--NAV-->
+    </ol>
+  </details>
+</nav>
+
+<main class="content" id="top">
+
+<header class="hero">
+  <p class="eyebrow">Cours · React 19.3 · pour développeurs Python et C#</p>
+  <h1>React, expliqué à quelqu'un qui vient du backend</h1>
+  <p class="lede">Tu sais concevoir une API, découper un service, débugger une requête lente. On part de là. Chaque notion de React est expliquée pas à pas, avec des images simples, du code commenté et des démos à manipuler, puis se termine par un exercice et un quiz.</p>
+
+  <div class="thesis">
+    <p class="formula" aria-label="UI égale f de l'état"><span>UI</span> <span class="eq">=</span> <span class="f">f</span>(<mark>état</mark>)</p>
+    <p class="formula-note">Toute l'idée de React tient dans cette ligne. L'interface est le résultat d'une fonction appliquée à des données. Quand les données changent, React rappelle la fonction et met l'écran à jour à ta place. Le module 00 explique chaque mot de cette phrase.</p>
+    <div class="thesis-grid">
+      <figure class="mini">
+        <figcaption>1 · L'état (tes données)</figcaption>
+        <pre><code class="language-javascript">{
+  filter: "à faire",
+  tasks: [
+    { id: 1, title: "Lire le module 5", done: false },
+    { id: 2, title: "Installer Vite", done: true },
+    { id: 3, title: "Tester useEffect", done: false }
+  ]
+}</code></pre>
+      </figure>
+      <figure class="mini">
+        <figcaption>2 · f : un composant</figcaption>
+        <pre><code class="language-jsx">function TaskList({ tasks, filter }) {
+  const visible = tasks.filter(t =>
+    filter === "à faire" ? !t.done : true
+  );
+  return (
+    <ul>
+      {visible.map(t => <li key={t.id}>{t.title}</li>)}
+    </ul>
+  );
+}</code></pre>
+      </figure>
+      <figure class="mini">
+        <figcaption>3 · L'UI à l'écran</figcaption>
+        <div class="mini-ui" aria-label="Aperçu du résultat">
+          <p class="mini-ui-title">À faire (2)</p>
+          <ul>
+            <li><span class="box"></span>Lire le module 5</li>
+            <li><span class="box"></span>Tester useEffect</li>
+          </ul>
+        </div>
+      </figure>
+    </div>
+  </div>
+
+  <div class="outcomes">
+    <div class="outcome"><h2>Lire un projet inconnu</h2><p>Savoir par où entrer, d'où viennent les données et qui les modifie.</p></div>
+    <div class="outcome"><h2>Débugger avec méthode</h2><p>React DevTools, messages d'erreur classiques, symptômes et leurs causes.</p></div>
+    <div class="outcome"><h2>Ajouter une fonctionnalité</h2><p>Choisir où vit l'état, quel hook utiliser, et ne rien casser autour.</p></div>
+    <div class="outcome"><h2>Piloter une IA</h2><p>Lui donner le bon contexte et relire son code avec un œil critique.</p></div>
+  </div>
+
+  <div class="legend" aria-label="Légende des encadrés">
+    <span>Tu croiseras ces encadrés :</span>
+    <span class="chip analogy">Analogie</span>
+    <span class="chip bridge">Côté backend</span>
+    <span class="chip trap">Piège</span>
+    <span class="chip key">À retenir</span>
+    <span class="chip recap">En bref</span>
+  </div>
+</header>
+
+<!-- ===================================================== 00 -->
+<section class="module" id="m00" data-short="Penser déclaratif">
+<header class="module-head"><span class="module-num">00</span><div><p class="module-kicker">Mise en route</p><h2>Changer de regard : penser déclaratif</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Découvrir TaskFlow, l'application d'exemple qui nous suivra tout le cours.</li>
+  <li>Comprendre ce qu'est le DOM et comment le navigateur affiche une page.</li>
+  <li>Voir, sur un schéma, qui fait quoi entre tes données, React, le DOM et l'écran.</li>
+  <li>Connaître les mots de vocabulaire qu'on utilisera partout.</li>
+</ul></div>
+
+<h3>L'application qui nous servira d'exemple : TaskFlow</h3>
+<p>Pendant tout le cours, on reprend le même exemple : <strong>TaskFlow</strong>, une petite application de gestion de tâches. Elle a trois zones qui affichent des informations liées entre elles :</p>
+<ul>
+<li>l'<strong>en-tête</strong>, qui annonce le nombre de tâches restantes ;</li>
+<li>le <strong>menu</strong>, avec une pastille rouge qui répète ce nombre ;</li>
+<li>la <strong>liste</strong> des tâches, avec une case à cocher par tâche.</li>
+</ul>
+<p>À droite de l'application, tu vois ses <strong>données</strong> : la liste des tâches telle qu'elle est rangée en mémoire. Coche quelques cases, puis passe en mode « JavaScript à la main » et recommence. Observe la pastille.</p>
+
+<div class="demo" id="demo-tf">
+  <div class="demo-head"><span>Démo · TaskFlow en miniature</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Façon de mettre l'écran à jour">
+      <button type="button" role="radio" aria-checked="true" data-mode="react">Façon React</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="manual">JavaScript à la main</button>
+    </div>
+    <div class="tf">
+      <div class="tf-app" aria-label="Application TaskFlow">
+        <div class="tf-top"><span class="tf-logo">TaskFlow</span><span class="tf-count" data-out="count">3 tâches restantes</span></div>
+        <div class="tf-body">
+          <div class="tf-menu"><span class="on">Tâches <b class="tf-badge" data-out="badge">3</b></span><span>Archives</span><span>Réglages</span></div>
+          <ul class="tf-list" data-out="list">
+            <li data-id="1"><input type="checkbox" id="tf-1"><label for="tf-1">Lire le module 5</label></li>
+            <li data-id="2"><input type="checkbox" id="tf-2"><label for="tf-2">Installer Vite</label></li>
+            <li data-id="3"><input type="checkbox" id="tf-3"><label for="tf-3">Tester useEffect</label></li>
+          </ul>
+        </div>
+      </div>
+      <div class="tf-side">
+        <p class="label">Les données (en mémoire)</p>
+        <pre class="tf-data"><code data-out="data">[
+  { id: 1, title: "Lire le module 5", done: false },
+  { id: 2, title: "Installer Vite", done: false },
+  { id: 3, title: "Tester useEffect", done: false }
+]</code></pre>
+      </div>
+    </div>
+    <p class="demo-hint" data-out="msg" aria-live="polite">Coche une tâche : en mode « Façon React », les trois zones restent toujours d'accord avec les données.</p>
+  </div>
+  <div class="log" data-out="log"><p class="l-empty">Ici s'affichera ce que le code fait à chaque clic.</p></div>
+</div>
+
+<p>En mode « JavaScript à la main », le code met à jour la ligne et l'en-tête, mais il a <strong>oublié la pastille</strong>. Les données disent une chose, l'écran en affiche une autre. Ce genre d'oubli est exactement le problème que React supprime. Pour comprendre comment, il faut d'abord savoir ce qu'est le DOM.</p>
+
+<h3>Qu'est-ce que le DOM ?</h3>
+<p>Quand tu ouvres une page web, voici ce qui se passe, dans l'ordre :</p>
+<ol>
+<li>Le serveur envoie un fichier HTML. Ce n'est que du <strong>texte</strong>.</li>
+<li>Le navigateur lit ce texte et construit en mémoire un <strong>arbre d'objets</strong> : un objet par balise, rangé dans son parent. Cet arbre s'appelle le <strong>DOM</strong> (<em>Document Object Model</em>, « le modèle objet du document »).</li>
+<li>Le navigateur <strong>dessine l'écran à partir de cet arbre</strong>. Pas à partir du texte HTML : à partir du DOM.</li>
+<li>JavaScript peut lire et modifier cet arbre. Dès qu'un objet change, le navigateur redessine la partie de l'écran concernée.</li>
+</ol>
+
+<figure class="dom3" aria-label="Du texte HTML au DOM puis à l'écran">
+  <div class="dom3-col">
+    <p class="label">1 · Le texte HTML</p>
+    <pre><code class="language-markup"><body>
+  <h1>TaskFlow</h1>
+  <p id="count">2 tâches restantes</p>
+  <ul>
+    <li>Lire le module 5</li>
+    <li>Tester useEffect</li>
+  </ul>
+</body></code></pre>
+  </div>
+  <div class="dom3-arrow" aria-hidden="true">le navigateur<br>construit →</div>
+  <div class="dom3-col">
+    <p class="label">2 · Le DOM : un arbre d'objets</p>
+    <ul class="rtree dom-tree">
+      <li><span class="rnode">body</span>
+        <ul>
+          <li><span class="rnode">h1 <em>« TaskFlow »</em></span></li>
+          <li><span class="rnode">p #count <em>« 2 tâches restantes »</em></span></li>
+          <li><span class="rnode">ul</span>
+            <ul>
+              <li><span class="rnode">li <em>« Lire le module 5 »</em></span></li>
+              <li><span class="rnode">li <em>« Tester useEffect »</em></span></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+  <div class="dom3-arrow" aria-hidden="true">puis<br>dessine →</div>
+  <div class="dom3-col">
+    <p class="label">3 · L'écran</p>
+    <div class="mini-ui">
+      <p class="mini-ui-title">TaskFlow</p>
+      <p class="dom-screen-p">2 tâches restantes</p>
+      <ul><li>• Lire le module 5</li><li>• Tester useEffect</li></ul>
+    </div>
+  </div>
+  <figcaption>Le HTML n'est lu qu'une fois. Ensuite, l'écran reflète toujours le DOM, l'arbre d'objets en mémoire.</figcaption>
+</figure>
+
+<p>Sans React, modifier l'écran consiste donc à aller chercher un objet dans cet arbre et à le changer :</p>
+<figure class="code"><figcaption>JavaScript sans React</figcaption><pre><code class="language-javascript">const p = document.querySelector("#count"); // 1. trouver l'objet <p id="count"> dans le DOM
+p.textContent = "1 tâche restante";           // 2. changer son texte
+                                              // 3. le navigateur redessine ce paragraphe</code></pre></figure>
+
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Le HTML, c'est la notice de montage d'un meuble en kit : du papier. Le DOM, c'est le meuble une fois monté dans ton salon. L'écran, c'est ce que tu vois en entrant dans la pièce.</p>
+<p>Une fois le meuble monté, tu ne retouches plus la notice : pour déplacer une étagère, tu agis directement sur le meuble. JavaScript fait pareil : il agit sur le DOM, et ce que tu vois change.</p>
+</aside>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>Tu connais <code>json.loads()</code> en Python : un texte JSON devient un dictionnaire que tu peux modifier. Le navigateur fait la même chose avec le HTML : le texte devient un arbre d'objets JavaScript, le DOM. La différence : le navigateur surveille cet arbre et redessine l'écran dès qu'il change.</p>
+</aside>
+
+<h3>Le problème : garder l'écran d'accord avec les données</h3>
+<p>Reprenons TaskFlow. Quand on coche une tâche, trois endroits du DOM doivent changer. Sans React, c'est toi qui dois penser à chacun :</p>
+<figure class="code"><figcaption>TaskFlow en JavaScript « à la main » <span class="tag bad">fragile</span></figcaption><pre><code class="language-javascript">function onCheck(task, checkbox) {
+  task.done = checkbox.checked;                       // les données changent
+
+  // Ensuite, il faut mettre à jour CHAQUE endroit de l'écran, un par un :
+  checkbox.closest("li").classList.toggle("done", task.done);  // 1. la ligne
+  const remaining = tasks.filter(t => !t.done).length;
+  document.querySelector("#count").textContent =               // 2. l'en-tête
+    `${remaining} tâches restantes`;
+  // 3. la pastille du menu ? Oubliée. L'écran affiche maintenant une erreur.
+}</code></pre></figure>
+<p>Avec React, tu écris les choses autrement. Ne cherche pas encore à comprendre chaque ligne (on verra <code>useState</code>, les props et <code>map</code> en détail). Regarde seulement la forme du code :</p>
+<figure class="code"><figcaption>TaskFlow avec React <span class="tag good">robuste</span></figcaption><pre><code class="language-jsx">function TaskFlow() {
+  const [tasks, setTasks] = useState(initialTasks);      // les données
+  const remaining = tasks.filter(t => !t.done).length;   // une valeur calculée à partir d'elles
+
+  function toggle(id) {
+    // Au clic, on modifie UNIQUEMENT les données
+    setTasks(tasks.map(t => (t.id === id ? { ...t, done: !t.done } : t)));
+  }
+
+  // On DÉCRIT l'écran entier pour ces données. Pas d'ordre « change ceci, puis cela ».
+  return (
+    <>
+      <Header remaining={remaining} />
+      <Menu badge={remaining} />
+      <TaskList tasks={tasks} onToggle={toggle} />
+    </>
+  );
+}</code></pre></figure>
+<p>Il n'y a plus d'étape « mettre à jour la pastille ». La pastille affiche <code>remaining</code>, et <code>remaining</code> est recalculé à partir des données à chaque changement. Impossible de l'oublier.</p>
+
+<h3>Impératif ou déclaratif</h3>
+<p>Ces deux styles portent un nom :</p>
+<ul>
+<li><strong>Impératif</strong> : tu donnes les <em>étapes</em>. « Trouve le paragraphe, change son texte, puis trouve la pastille, change son chiffre… »</li>
+<li><strong>Déclaratif</strong> : tu décris le <em>résultat</em>. « L'en-tête affiche le nombre de tâches restantes. » L'outil se charge des étapes.</li>
+</ul>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>En taxi, le style impératif consiste à guider le chauffeur rue par rue : « à gauche, tout droit, deuxième à droite ». Le style déclaratif consiste à donner l'adresse : le GPS calcule le trajet, et le recalcule si une rue est fermée.</p>
+<p>Autre image : un tableur. La cellule <code>=A1*2</code> ne contient pas d'instruction « mets-toi à jour quand A1 change ». Elle décrit un résultat, et le tableur s'occupe du reste. Tes composants React sont les formules ; les données sont les cellules d'entrée.</p>
+</aside>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Impératif (à la main)</th><th>Déclaratif (React)</th></tr></thead>
+<tbody>
+<tr><td>Tu écris</td><td>les étapes pour modifier l'écran</td><td>à quoi l'écran doit ressembler pour des données</td></tr>
+<tr><td>Qui modifie le DOM</td><td>toi</td><td>React</td></tr>
+<tr><td>Quand une donnée change</td><td>tu mets à jour chaque endroit concerné</td><td>tu modifies la donnée, c'est tout</td></tr>
+<tr><td>Risque principal</td><td>oublier un endroit (la pastille)</td><td>quasi nul : tout part des mêmes données</td></tr>
+</tbody></table></div>
+
+<h3>Le cycle complet : données, React, DOM, écran</h3>
+<p>Voici le schéma à garder en tête pour tout le cours. Chaque étape a un responsable : <span class="who who-you">toi</span>, <span class="who who-react">React</span>, <span class="who who-browser">le navigateur</span> ou <span class="who who-user">l'utilisateur</span>.</p>
+
+<div class="cycle" id="demo-cycle">
+  <ol class="cycle-steps">
+    <li data-step="1" data-arrow="→"><span class="who who-you">toi</span><b>Les données</b><span>la liste des tâches, rangée dans l'état du composant</span></li>
+    <li data-step="2" data-arrow="→"><span class="who who-you">ton code</span><b>Tes composants décrivent l'écran</b><span>React appelle tes fonctions ; elles renvoient l'écran voulu pour ces données</span></li>
+    <li data-step="3" data-arrow="↓"><span class="who who-react">React</span><b>React compare</b><span>nouvelle description contre ancienne : où sont les différences ?</span></li>
+    <li data-step="4" data-arrow="←"><span class="who who-react">React</span><b>React modifie le DOM</b><span>seulement là où il y a une différence</span></li>
+    <li data-step="5" data-arrow="←"><span class="who who-browser">navigateur</span><b>L'écran est redessiné</b><span>à partir du DOM mis à jour</span></li>
+    <li data-step="6" data-arrow="↑"><span class="who who-user">utilisateur</span><b>Un clic</b><span>React appelle ton gestionnaire, qui modifie les données : retour à l'étape 1</span></li>
+  </ol>
+  <div class="cycle-panel">
+    <div class="cycle-controls">
+      <button type="button" class="btn ghost" data-act="prev">Étape précédente</button>
+      <button type="button" class="btn" data-act="next">Suivre un clic pas à pas</button>
+      <button type="button" class="btn ghost small" data-act="restart">Recommencer</button>
+      <span class="cycle-pos" data-out="pos"></span>
+    </div>
+    <p class="cycle-detail" data-out="detail" aria-live="polite">Clique sur « Suivre un clic pas à pas » : on va suivre le premier affichage de TaskFlow, puis ce qui se passe quand l'utilisateur coche « Installer Vite ».</p>
+  </div>
+</div>
+
+<p>Tu n'écris que les étapes 1, 2 et le gestionnaire de clic. React s'occupe des étapes 3 et 4, le navigateur de l'étape 5.</p>
+<aside class="note analogy"><p class="label">Analogie · les étapes 3 et 4</p>
+<p>Pense à un décorateur d'intérieur. Tu lui montres une photo de la pièce telle que tu la veux. Il compare avec la pièce actuelle et ne bouge que ce qui diffère : il déplace la lampe, il ne vide pas toute la maison pour la remeubler. C'est le jeu des sept différences, appliqué à l'écran.</p>
+<p>Pourquoi ne pas tout reconstruire ? Parce que modifier le DOM coûte du temps, et que tout reconstruire ferait perdre au passage le texte en cours de saisie, la position de défilement ou le champ actif.</p>
+</aside>
+<aside class="note key"><p class="label">À retenir</p>
+<p>Tu entendras parler de « DOM virtuel ». C'est le nom donné à la description légère de l'écran que tes composants renvoient (étape 2) et que React compare (étape 3), avant de toucher au vrai DOM (étape 4).</p>
+</aside>
+
+<h3>Le vocabulaire de base</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Mot</th><th>En une phrase</th><th>Une image pour s'en souvenir</th></tr></thead>
+<tbody>
+<tr><td><strong>DOM</strong></td><td>L'arbre d'objets que le navigateur construit à partir du HTML et qu'il affiche.</td><td>Le meuble monté (le HTML était la notice).</td></tr>
+<tr><td><strong>Composant</strong></td><td>Un morceau d'interface réutilisable, écrit comme une fonction.</td><td>Une pièce de Lego qu'on assemble avec d'autres.</td></tr>
+<tr><td><strong>JSX</strong></td><td>La syntaxe qui ressemble à du HTML, écrite dans le JavaScript, pour décrire l'écran.</td><td>Le croquis de la pièce telle qu'on la veut.</td></tr>
+<tr><td><strong>Props</strong></td><td>Les informations qu'un composant reçoit de son parent.</td><td>Les options cochées sur un bon de commande.</td></tr>
+<tr><td><strong>État (state)</strong></td><td>La mémoire d'un composant. Quand elle change, l'écran suit.</td><td>Le tableau blanc qu'on efface et réécrit.</td></tr>
+<tr><td><strong>Rendu (render)</strong></td><td>React appelle ton composant pour savoir quoi afficher.</td><td>Redessiner le croquis avec les nouvelles données.</td></tr>
+<tr><td><strong>Hook</strong></td><td>Une fonction <code>use…</code> qui donne un pouvoir de React à ton composant (mémoire, effets…).</td><td>Une prise murale où l'on branche un appareil.</td></tr>
+<tr><td><strong>Effet</strong></td><td>Une action vers l'extérieur de React : réseau, minuteur, titre de l'onglet.</td><td>Passer un coup de fil une fois la pièce rangée.</td></tr>
+<tr><td><strong>Contexte</strong></td><td>Une valeur partagée avec tout un groupe de composants, sans la passer de main en main.</td><td>Le Wi-Fi de la maison.</td></tr>
+</tbody></table></div>
+
+<h3>Quelle version de React ?</h3>
+<p>Ce cours suit React 19 ; la version stable actuelle est la 19.3, publiée le 9 septembre 2026. Les fondamentaux présentés ici n'ont pas bougé depuis l'arrivée des hooks en 2019. Dans de vieux projets ou tutoriels, tu croiseras des composants écrits sous forme de classes, l'outil <code>create-react-app</code> (déprécié depuis février 2025) ou <code>ReactDOM.render</code> (supprimé en React 19). On verra comment les reconnaître.</p>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Le navigateur transforme le HTML en <strong>DOM</strong>, un arbre d'objets, et dessine l'écran à partir de lui.</li>
+<li>Avec React, tu ne modifies pas le DOM : tu modifies les <strong>données</strong>, tes composants <strong>décrivent</strong> l'écran, React applique les <strong>différences</strong>.</li>
+<li>Comme tout part des mêmes données, plusieurs zones de l'écran ne peuvent plus se contredire.</li>
+</ul>
+</aside>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Qu'est-ce que le DOM ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Le fichier HTML envoyé par le serveur.</button>
+    <button type="button" data-k="b">L'arbre d'objets que le navigateur construit à partir du HTML, et à partir duquel il dessine l'écran.</button>
+    <button type="button" data-k="c">Une partie de la bibliothèque React.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Le HTML est du texte, lu une fois. Le DOM est l'arbre d'objets construit à partir de ce texte. Il existe avec ou sans React : React se contente de le modifier pour toi.</p>
+</div>
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Dans React, une donnée change et l'écran doit suivre. Que fais-tu ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Je sélectionne l'élément avec <code>querySelector</code> et je change son texte.</button>
+    <button type="button" data-k="b">Je mets à jour la donnée ; React rappelle mes composants, compare et applique les différences.</button>
+    <button type="button" data-k="c">Je recharge la page pour afficher la nouvelle valeur.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>C'est le cycle du schéma : données, description, comparaison, modification du DOM, affichage. Tu n'interviens qu'au début (les données) et dans la description (tes composants).</p>
+</div>
+</section><!--/m00-->
+
+<!-- ===================================================== 01 -->
+<section class="module" id="m01" data-short="Les bases de JavaScript">
+<header class="module-head"><span class="module-num">01</span><div><p class="module-kicker">Prérequis</p><h2>Les bases de JavaScript pour lire du React</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Connaître les types, les objets, les tableaux et les fonctions de JavaScript.</li>
+  <li>Lire sans buter la syntaxe moderne : déstructuration, spread, fonctions fléchées, <code>?.</code>, <code>??</code>.</li>
+  <li>Comprendre la différence entre une valeur et une référence, la clé du module 05.</li>
+  <li>Traduire rapidement depuis Python et C#.</li>
+</ul></div>
+
+<p>React, c'est du JavaScript avec un peu de syntaxe en plus (JSX). Quand une ligne de React te semble obscure, c'est presque toujours du JavaScript moderne. Ce module te donne les bases, puis une table de traduction.</p>
+<aside class="note key"><p class="label">À retenir · essaie en direct</p>
+<p>Ouvre la console de ton navigateur (touche F12, onglet « Console ») et tape les exemples. Tu verras le résultat immédiatement, comme dans l'interpréteur Python.</p>
+</aside>
+
+<h3>1. Les types de base</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Type</th><th>Exemple</th><th>À savoir</th></tr></thead>
+<tbody>
+<tr><td>number</td><td><code>42</code>, <code>3.14</code></td><td>Un seul type pour les entiers et les décimaux (pas de <code>int</code> ni de <code>float</code>).</td></tr>
+<tr><td>string</td><td><code>"Ada"</code>, <code>'Ada'</code>, <code>`Ada`</code></td><td>Trois sortes de guillemets ; les accents graves permettent l'interpolation.</td></tr>
+<tr><td>boolean</td><td><code>true</code>, <code>false</code></td><td>En minuscules.</td></tr>
+<tr><td>null</td><td><code>null</code></td><td>« Vide, volontairement ». L'équivalent de <code>None</code>.</td></tr>
+<tr><td>undefined</td><td><code>undefined</code></td><td>« Pas de valeur » : variable non remplie, propriété absente, fonction sans <code>return</code>.</td></tr>
+<tr><td>object</td><td><code>{ name: "Ada" }</code></td><td>Des paires clé / valeur, comme un <code>dict</code> Python.</td></tr>
+<tr><td>array</td><td><code>[1, 2, 3]</code></td><td>Une liste ordonnée, comme une <code>list</code> Python.</td></tr>
+<tr><td>function</td><td><code>x => x * 2</code></td><td>Une valeur comme une autre : on la range dans une variable, on la passe en paramètre.</td></tr>
+</tbody></table></div>
+<figure class="code"><figcaption>console du navigateur</figcaption><pre><code class="language-javascript">typeof 42          // "number"
+typeof "Ada"       // "string"
+typeof undefined   // "undefined"
+typeof null        // "object"   (une bizarrerie historique du langage)
+Array.isArray([1]) // true       (typeof d'un tableau renvoie "object")
+
+const user = { name: "Ada" };
+user.phone         // undefined : la propriété n'existe pas, mais AUCUNE erreur
+user.phone.number  // TypeError : Cannot read properties of undefined</code></pre></figure>
+<aside class="note trap"><p class="label">Piège</p>
+<p>En Python, <code>user["phone"]</code> lève une <code>KeyError</code> si la clé manque. En JavaScript, <code>user.phone</code> renvoie tranquillement <code>undefined</code>. L'erreur n'arrive qu'à l'étape suivante, quand tu lis une propriété de ce <code>undefined</code>. C'est l'erreur la plus fréquente des applications React : <em>Cannot read properties of undefined</em>. L'opérateur <code>?.</code> (section 6) sert à l'éviter.</p>
+</aside>
+
+<h3>2. Les variables : const et let</h3>
+<figure class="code"><figcaption>variables.js</figcaption><pre><code class="language-javascript">const name = "Ada";   // const : on ne pourra pas réassigner name
+let count = 0;        // let : on pourra réassigner count
+count = count + 1;    // OK
+
+const user = { name: "Ada" };
+user.name = "Grace";  // autorisé : on modifie l'INTÉRIEUR de l'objet
+user = {};            // TypeError : on ne peut pas réassigner une const</code></pre></figure>
+<p>Règle simple : écris <code>const</code> partout, et <code>let</code> seulement si tu dois réassigner la variable. Le vieux mot-clé <code>var</code> se comporte de façon surprenante : ignore-le. Une variable n'existe que dans le bloc <code>{ … }</code> où elle est déclarée.</p>
+
+<h3>3. Les objets</h3>
+<figure class="code"><figcaption>objets.js</figcaption><pre><code class="language-javascript">const title = "Coder";
+const done = false;
+
+const task = { id: 1, title, done };   // raccourci : { id: 1, title: title, done: done }
+
+task.title                // "Coder"   lecture avec un point
+task["title"]             // "Coder"   lecture avec des crochets
+const field = "done";
+task[field]               // false     utile quand le nom de la clé est dans une variable
+
+task.tags = ["dev"];      // ajouter une propriété
+task.owner = { name: "Ada" };
+task.owner.name           // "Ada"     objets imbriqués
+
+Object.keys(task)         // ["id", "title", "done", "tags", "owner"]
+Object.entries(task)      // [["id", 1], ["title", "Coder"], ...]   ≈ dict.items()</code></pre></figure>
+<p>Le raccourci <code>{ title, done }</code> est partout dans React : quand la clé et la variable ont le même nom, on ne l'écrit qu'une fois.</p>
+
+<h3>4. Les tableaux</h3>
+<p>Les méthodes de tableaux sont au cœur de React : <code>map</code> sert à afficher des listes, <code>filter</code> à les filtrer. Elles se rangent en deux familles, et cette différence comptera beaucoup au module 05 :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Méthode</th><th>Ce qu'elle fait</th><th>Exemple → résultat</th><th>Modifie l'original ?</th></tr></thead>
+<tbody>
+<tr><td><code>map</code></td><td>transforme chaque élément</td><td><code>[1, 2, 3].map(n => n * 2)</code> → <code>[2, 4, 6]</code></td><td>non, nouveau tableau</td></tr>
+<tr><td><code>filter</code></td><td>garde les éléments qui passent un test</td><td><code>[1, 2, 3].filter(n => n > 1)</code> → <code>[2, 3]</code></td><td>non, nouveau tableau</td></tr>
+<tr><td><code>find</code></td><td>renvoie le premier élément qui passe le test</td><td><code>[1, 2, 3].find(n => n > 1)</code> → <code>2</code></td><td>non</td></tr>
+<tr><td><code>some</code> / <code>every</code></td><td>au moins un / tous passent le test</td><td><code>[1, 2, 3].some(n => n > 2)</code> → <code>true</code></td><td>non</td></tr>
+<tr><td><code>includes</code></td><td>contient la valeur ?</td><td><code>["a", "b"].includes("b")</code> → <code>true</code></td><td>non</td></tr>
+<tr><td><code>reduce</code></td><td>combine tout en une seule valeur</td><td><code>[1, 2, 3].reduce((s, n) => s + n, 0)</code> → <code>6</code></td><td>non</td></tr>
+<tr><td><code>slice</code></td><td>copie une portion</td><td><code>[1, 2, 3].slice(0, 2)</code> → <code>[1, 2]</code></td><td>non, nouveau tableau</td></tr>
+<tr><td><code>toSorted</code></td><td>copie triée</td><td><code>[3, 1, 2].toSorted()</code> → <code>[1, 2, 3]</code></td><td>non, nouveau tableau</td></tr>
+<tr><td><code>push</code> / <code>pop</code></td><td>ajoute / retire à la fin</td><td><code>arr.push(4)</code></td><td><strong>oui</strong></td></tr>
+<tr><td><code>splice</code></td><td>retire ou insère au milieu</td><td><code>arr.splice(0, 1)</code></td><td><strong>oui</strong></td></tr>
+<tr><td><code>sort</code> / <code>reverse</code></td><td>trie / inverse sur place</td><td><code>arr.sort()</code></td><td><strong>oui</strong></td></tr>
+</tbody></table></div>
+<figure class="code"><figcaption>tableaux.js · sur les tâches de TaskFlow</figcaption><pre><code class="language-javascript">const tasks = [
+  { id: 1, title: "Lire", done: true },
+  { id: 2, title: "Coder", done: false },
+  { id: 3, title: "Tester", done: false },
+];
+
+tasks.length                          // 3
+tasks[0].title                        // "Lire"   (les index commencent à 0)
+tasks.map(t => t.title)               // ["Lire", "Coder", "Tester"]
+tasks.filter(t => !t.done)            // les tâches 2 et 3
+tasks.filter(t => !t.done).length     // 2   → le nombre de tâches restantes
+tasks.find(t => t.id === 2)           // { id: 2, title: "Coder", done: false }
+tasks.every(t => t.done)              // false
+for (const t of tasks) {              // boucle : ≈ « for t in tasks » en Python
+  console.log(t.title);
+}</code></pre></figure>
+<p>Lis <code>tasks.filter(t => !t.done)</code> à voix haute : « dans <code>tasks</code>, garde chaque tâche <code>t</code> qui n'est pas terminée ». La fonction passée à <code>filter</code> est appelée une fois par élément.</p>
+
+<h3>5. Les fonctions</h3>
+<figure class="code"><figcaption>fonctions.js</figcaption><pre><code class="language-javascript">function add(a, b) {               // déclaration classique
+  return a + b;
+}
+
+const add2 = (a, b) => a + b;       // fonction fléchée : sans accolades, le return est implicite
+const add3 = (a, b) => {            // avec accolades, il faut écrire return
+  return a + b;
+};
+const square = n => n * n;          // un seul paramètre : parenthèses facultatives
+const makeTask = title => ({ title, done: false }); // renvoyer un objet : parenthèses OBLIGATOIRES
+
+function greet(name = "inconnu") {  // valeur par défaut d'un paramètre
+  return `Bonjour ${name}`;
+}
+
+function sum(...numbers) {          // paramètre « reste » : ≈ *args en Python
+  return numbers.reduce((s, n) => s + n, 0);
+}
+sum(1, 2, 3)                        // 6</code></pre></figure>
+<aside class="note trap"><p class="label">Piège</p>
+<p><code>n => { n * 2 }</code> renvoie <code>undefined</code> : les accolades ouvrent un bloc, il faudrait <code>return</code>. Pour renvoyer un objet sans <code>return</code>, entoure-le de parenthèses : <code>title => ({ title })</code>. Sans elles, JavaScript prend les accolades pour un bloc. Tu croiseras souvent ce piège dans des <code>map</code>.</p>
+</aside>
+<p>Une fonction est une valeur : on peut la passer en paramètre à une autre fonction. C'est ce qu'on fait avec <code>map</code>, et c'est ce que React fera pour les clics :</p>
+<figure class="code"><figcaption>événements.jsx</figcaption><pre><code class="language-jsx"><button onClick={handleClick}>OK</button>      // JUSTE : on donne la fonction, React l'appellera au clic
+<button onClick={handleClick()}>OK</button>    // FAUX : on l'appelle tout de suite, pendant l'affichage
+<button onClick={() => remove(id)}>X</button>  // JUSTE : une petite fonction qui appellera remove(id) au clic</code></pre></figure>
+
+<h3>6. Les conditions</h3>
+<figure class="code"><figcaption>conditions.js</figcaption><pre><code class="language-javascript">// if / else : comme partout
+if (count === 0) {
+  label = "Rien à faire";
+} else {
+  label = `${count} tâches`;
+}
+
+// Ternaire : condition ? siVrai : siFaux     (≈ « a if cond else b » en Python)
+const label = count === 0 ? "Rien à faire" : `${count} tâches`;
+
+// && : « si la gauche est vraie, prends la droite »
+const warning = isLate && "En retard";          // "En retard" ou false
+
+// || : « la gauche, ou à défaut la droite » (remplace TOUTE valeur fausse, y compris 0 et "")
+const name = input || "Anonyme";
+
+// ?? : « la gauche, ou à défaut la droite » (ne remplace QUE null et undefined)
+const pageSize = settings.pageSize ?? 20;       // garde 0 si l'utilisateur a choisi 0
+
+// ?. : « lis la propriété seulement si l'objet existe »
+const city = user?.address?.city;               // undefined au lieu d'une erreur</code></pre></figure>
+<p>En React, le ternaire et <code>&&</code> servent à afficher des éléments sous condition (module 06), <code>?.</code> et <code>??</code> à lire des données qui ne sont peut-être pas encore chargées.</p>
+
+<h3>7. Vérité, égalité</h3>
+<aside class="note trap"><p class="label">Piège</p>
+<ol>
+<li><strong>Un tableau vide est « vrai ».</strong> En Python, <code>[]</code> est faux ; en JavaScript, <code>[]</code> et <code>{}</code> sont vrais. Les seules valeurs fausses sont <code>false</code>, <code>0</code>, <code>""</code>, <code>null</code>, <code>undefined</code> et <code>NaN</code>. Pour tester une liste, écris <code>items.length > 0</code>.</li>
+<li><strong><code>==</code> convertit les types</strong> : <code>"1" == 1</code> est vrai. Utilise toujours <code>===</code>, qui compare sans conversion.</li>
+</ol>
+</aside>
+<figure class="code"><figcaption>console du navigateur</figcaption><pre><code class="language-javascript">Boolean([])          // true      (en Python, ce serait False)
+Boolean("")          // false
+0 || "défaut"        // "défaut"
+0 ?? "défaut"        // 0
+"1" == 1             // true      → d'où l'usage systématique de ===
+"1" === 1            // false</code></pre></figure>
+
+<h3>8. Valeur ou référence : la notion la plus importante pour React</h3>
+<p>Les valeurs simples (nombres, chaînes, booléens) sont <strong>copiées</strong>. Les objets et les tableaux, eux, sont <strong>partagés</strong> : une variable ne contient pas l'objet, elle contient son <strong>adresse</strong> en mémoire.</p>
+<figure class="code"><figcaption>références.js</figcaption><pre><code class="language-javascript">let a = 1;
+let b = a;              // b reçoit une COPIE de la valeur 1
+b = 2;
+a                       // 1 : a n'a pas bougé
+
+const u1 = { name: "Ada" };
+const u2 = u1;          // u2 reçoit une copie de l'ADRESSE : u1 et u2 désignent le même objet
+u2.name = "Grace";
+u1.name                 // "Grace" !  il n'y a qu'un seul objet
+u1 === u2               // true : même adresse
+
+const u3 = { ...u1 };   // un NOUVEL objet, avec le même contenu (on verra « ... » juste après)
+u3 === u1               // false : adresses différentes, même si le contenu est identique</code></pre></figure>
+<div class="memmap" aria-label="Deux variables pointent vers le même objet, une troisième vers une copie">
+  <div class="mem-vars">
+    <span class="mem-var">u1 <i class="ptr p1">→ objet n°1</i></span>
+    <span class="mem-var">u2 <i class="ptr p1">→ objet n°1</i></span>
+    <span class="mem-var">u3 <i class="ptr p2">→ objet n°2</i></span>
+  </div>
+  <div class="mem-boxes">
+    <div class="mem-box p1"><b>objet n°1</b>{ name: "Grace" }</div>
+    <div class="mem-box p2"><b>objet n°2</b>{ name: "Grace" }</div>
+  </div>
+</div>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Une variable qui « contient » un objet est comme un papier où est notée l'adresse d'une maison. Copier la variable, c'est recopier l'adresse sur un deuxième papier : il y a toujours une seule maison. Si quelqu'un repeint la maison, tous les détenteurs de l'adresse la verront repeinte. Pour avoir deux maisons, il faut en construire une seconde.</p>
+<p><code>===</code> sur deux objets compare les adresses, pas l'intérieur des maisons. React compare de cette façon : retiens cette image, le module 05 en dépend.</p>
+</aside>
+
+<h3>9. Déstructuration, spread et rest</h3>
+<figure class="code"><figcaption>déstructuration.jsx</figcaption><pre><code class="language-jsx">// Déstructurer un objet : sortir des champs dans des variables
+const task = { id: 1, title: "Coder", done: false };
+const { title, done } = task;           // title = "Coder", done = false
+const { id, ...rest } = task;           // id = 1, rest = { title: "Coder", done: false }
+
+// Déstructurer un tableau : par position
+const [first, second] = ["a", "b"];     // first = "a", second = "b"
+const [count, setCount] = useState(0);  // useState renvoie un tableau de 2 éléments
+
+// Déstructurer directement les paramètres d'une fonction
+function Avatar({ url, name }) {        // au lieu de (props) puis props.url, props.name
+  return <img src={url} alt={name} />;
+}
+
+// Spread : « vider » le contenu dans un nouvel objet ou tableau
+const updated = { ...task, done: true };  // nouvel objet, task est intact
+const more = [...["a", "b"], "c"];        // ["a", "b", "c"]
+Math.max(...[3, 8, 1])                    // 8   ≈ max(*nums) en Python</code></pre></figure>
+
+<h3>10. Les chaînes de caractères</h3>
+<figure class="code"><figcaption>chaînes.js</figcaption><pre><code class="language-javascript">const name = "Ada Lovelace";
+`Bonjour ${name}, tu as ${2 + 1} tâches`   // interpolation entre accents graves
+name.length                                 // 12
+name.toLowerCase()                          // "ada lovelace"
+name.includes("Love")                       // true
+name.startsWith("Ada")                      // true
+"  texte  ".trim()                          // "texte"
+"a,b,c".split(",")                          // ["a", "b", "c"]
+["a", "b"].join(" / ")                      // "a / b"</code></pre></figure>
+
+<h3>11. Les modules : import et export</h3>
+<figure class="code"><figcaption>math.js et app.js</figcaption><pre><code class="language-javascript">// math.js
+export default function add(a, b) { return a + b; } // un seul export « par défaut » par fichier
+export const PI = 3.14;                              // exports « nommés » : autant que tu veux
+
+// app.js
+import add, { PI } from "./math.js";   // l'export par défaut sans accolades, les nommés avec
+import { useState } from "react";      // un nom sans "./" : une bibliothèque installée</code></pre></figure>
+
+<h3>12. L'asynchrone : Promise, async, await</h3>
+<p>Un appel réseau prend du temps. JavaScript ne bloque pas en l'attendant : il te donne tout de suite une <strong>Promise</strong>, une promesse de résultat futur, et continue son travail.</p>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Au pressing, on te remet un ticket tout de suite ; les vêtements, tu les récupères plus tard. La Promise est le ticket. <code>await</code> veut dire « j'attends ici que le ticket soit honoré avant de continuer cette fonction ».</p>
+</aside>
+<figure class="code"><figcaption>api.js</figcaption><pre><code class="language-javascript">// Avec async / await (le plus lisible)
+async function loadTasks() {
+  try {
+    const res = await fetch("/api/tasks");               // attend la réponse HTTP
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);  // fetch ne lève PAS d'erreur sur un 404 / 500
+    const tasks = await res.json();                      // attend la lecture du corps JSON
+    return tasks;
+  } catch (error) {
+    console.error("Chargement impossible :", error);
+    throw error;
+  }
+}
+
+// La même chose avec .then() (tu la verras dans du code plus ancien)
+fetch("/api/tasks")
+  .then(res => res.json())
+  .then(tasks => console.log(tasks))
+  .catch(error => console.error(error));</code></pre></figure>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>Une Promise joue le rôle d'une <code>Task<T></code> en C# ou d'une coroutine en Python, et <code>async</code> / <code>await</code> s'utilisent de la même façon. Différence importante : <code>fetch</code> ne lève une exception qu'en cas d'échec réseau. Un 404 ou un 500 renvoie une réponse normale ; c'est à toi de tester <code>res.ok</code>.</p>
+</aside>
+
+<h3>13. JSON et classes</h3>
+<figure class="code"><figcaption>json-et-classes.js</figcaption><pre><code class="language-javascript">JSON.stringify({ id: 1, done: false })   // '{"id":1,"done":false}'   ≈ json.dumps
+JSON.parse('{"id":1,"done":false}')      // { id: 1, done: false }    ≈ json.loads
+
+// Les classes existent, mais sont rares dans le React moderne
+class Task {
+  constructor(title) {
+    this.title = title;   // this ≈ self en Python
+    this.done = false;
+  }
+  toggle() {
+    this.done = !this.done;
+  }
+}</code></pre></figure>
+
+<h3>La table de traduction</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Concept</th><th>JavaScript</th><th>Python</th><th>C#</th></tr></thead>
+<tbody>
+<tr><td>Variables</td><td><code>const x = 1; let y = 2;</code></td><td><code>x = 1</code></td><td><code>var x = 1;</code></td></tr>
+<tr><td>« Rien »</td><td><code>null</code>, <code>undefined</code></td><td><code>None</code></td><td><code>null</code></td></tr>
+<tr><td>Type d'une valeur</td><td><code>typeof x</code></td><td><code>type(x)</code></td><td><code>x.GetType()</code></td></tr>
+<tr><td>Fonction fléchée</td><td><code>x => x * 2</code></td><td><code>lambda x: x * 2</code></td><td><code>x => x * 2</code></td></tr>
+<tr><td>Paramètre par défaut</td><td><code>(n = 10) => …</code></td><td><code>def f(n=10)</code></td><td><code>void F(int n = 10)</code></td></tr>
+<tr><td>Nombre variable d'arguments</td><td><code>(...args) => …</code></td><td><code>def f(*args)</code></td><td><code>params int[] args</code></td></tr>
+<tr><td>Chaîne interpolée</td><td><code>`Bonjour ${name}`</code></td><td><code>f"Bonjour {name}"</code></td><td><code>$"Bonjour {name}"</code></td></tr>
+<tr><td>Ternaire</td><td><code>c ? a : b</code></td><td><code>a if c else b</code></td><td><code>c ? a : b</code></td></tr>
+<tr><td>Objet / dictionnaire</td><td><code>{ name: "Ada" }</code></td><td><code>{"name": "Ada"}</code></td><td><code>new { Name = "Ada" }</code></td></tr>
+<tr><td>Clés d'un objet</td><td><code>Object.keys(o)</code></td><td><code>d.keys()</code></td><td><code>dict.Keys</code></td></tr>
+<tr><td>Déstructurer un objet</td><td><code>const { name, age } = user;</code></td><td><code>name, age = u["name"], u["age"]</code></td><td><code>var (name, age) = user;</code></td></tr>
+<tr><td>Déstructurer un tableau</td><td><code>const [a, b] = list;</code></td><td><code>a, b = lst</code></td><td><code>var (a, b) = tuple;</code></td></tr>
+<tr><td>Copier en changeant un champ</td><td><code>{ ...user, age: 31 }</code></td><td><code>{**user, "age": 31}</code></td><td><code>user with { Age = 31 }</code></td></tr>
+<tr><td>Copier un tableau en ajoutant</td><td><code>[...items, x]</code></td><td><code>[*items, x]</code></td><td><code>[..items, x]</code></td></tr>
+<tr><td>Taille d'une liste</td><td><code>items.length</code></td><td><code>len(items)</code></td><td><code>items.Count</code></td></tr>
+<tr><td>Transformer</td><td><code>items.map(i => i.name)</code></td><td><code>[i.name for i in items]</code></td><td><code>items.Select(i => i.Name)</code></td></tr>
+<tr><td>Filtrer</td><td><code>items.filter(i => i.done)</code></td><td><code>[i for i in items if i.done]</code></td><td><code>items.Where(i => i.Done)</code></td></tr>
+<tr><td>Premier qui correspond</td><td><code>items.find(i => i.id === 2)</code></td><td><code>next((i for i in items if …), None)</code></td><td><code>items.FirstOrDefault(i => …)</code></td></tr>
+<tr><td>Au moins un / tous</td><td><code>some</code> / <code>every</code></td><td><code>any</code> / <code>all</code></td><td><code>Any</code> / <code>All</code></td></tr>
+<tr><td>Contient</td><td><code>items.includes(x)</code></td><td><code>x in items</code></td><td><code>items.Contains(x)</code></td></tr>
+<tr><td>Agréger</td><td><code>items.reduce((s, i) => s + i, 0)</code></td><td><code>sum(items)</code></td><td><code>items.Sum()</code></td></tr>
+<tr><td>Boucle</td><td><code>for (const i of items)</code></td><td><code>for i in items:</code></td><td><code>foreach (var i in items)</code></td></tr>
+<tr><td>Accès sûr, valeur par défaut</td><td><code>user?.city ?? "?"</code></td><td>pas d'équivalent direct</td><td><code>user?.City ?? "?"</code></td></tr>
+<tr><td>Égalité</td><td><code>a === b</code></td><td><code>a == b</code></td><td><code>a == b</code></td></tr>
+<tr><td>Exceptions</td><td><code>try { } catch (e) { }</code></td><td><code>try: … except Exception as e:</code></td><td><code>try { } catch (Exception e) { }</code></td></tr>
+<tr><td>JSON</td><td><code>JSON.parse</code> / <code>JSON.stringify</code></td><td><code>json.loads</code> / <code>json.dumps</code></td><td><code>JsonSerializer.Deserialize</code> / <code>Serialize</code></td></tr>
+<tr><td>Imports</td><td><code>import { useState } from "react";</code></td><td><code>from x import y</code></td><td><code>using X;</code></td></tr>
+<tr><td>Asynchrone</td><td><code>await fetch(url)</code></td><td><code>await client.get(url)</code></td><td><code>await http.GetAsync(url)</code></td></tr>
+</tbody></table></div>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Un objet est un dictionnaire, un tableau est une liste ; <code>map</code> et <code>filter</code> créent de nouveaux tableaux, <code>push</code> et <code>sort</code> modifient l'original.</li>
+<li>Une propriété absente vaut <code>undefined</code> sans erreur ; <code>?.</code> et <code>??</code> protègent les lectures.</li>
+<li>Les objets et tableaux sont partagés par référence : <code>===</code> compare les adresses, pas le contenu.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice 1 · manipuler des données</p>
+<p>Avec l'objet ci-dessous, et sans jamais le modifier :</p>
+<figure class="code"><figcaption>order.js</figcaption><pre><code class="language-javascript">const order = {
+  id: 7,
+  customer: { name: "Lina" },
+  lines: [{ sku: "A", qty: 2, price: 5 }, { sku: "B", qty: 0, price: 12 }],
+};</code></pre></figure>
+<ol>
+<li>Récupère <code>id</code> et <code>lines</code> par déstructuration.</li>
+<li>Crée une copie de <code>order</code> avec <code>status: "paid"</code>.</li>
+<li>Obtiens uniquement les lignes dont la quantité est supérieure à 0.</li>
+<li>Calcule le total (quantité × prix) de toutes les lignes.</li>
+<li>Obtiens le nom du client, ou <code>"Anonyme"</code> si <code>customer</code> est absent.</li>
+</ol>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>solution.js</figcaption><pre><code class="language-javascript">const { id, lines } = order;                                  // 1
+const paidOrder = { ...order, status: "paid" };               // 2 : order est intact
+const activeLines = lines.filter(l => l.qty > 0);             // 3
+const total = lines.reduce((sum, l) => sum + l.qty * l.price, 0); // 4 : 10
+const customerName = order.customer?.name ?? "Anonyme";       // 5</code></pre></figure>
+</details>
+</div>
+<div class="exercise"><p class="label">Exercice 2 · prédis le résultat</p>
+<p>Sans console, que vaut chaque ligne ?</p>
+<figure class="code"><figcaption>prédictions.js</figcaption><pre><code class="language-javascript">const a = [1, 2, 3];
+const b = a;
+b.push(4);
+a.length;                     // ?
+
+const c = [...a];
+c.push(5);
+a.length;                     // ?
+
+const tasks = [{ done: true }, { done: false }];
+tasks.map(t => { t.done });   // ?
+
+[] ? "plein" : "vide";        // ?</code></pre></figure>
+<details class="solution"><summary>Voir la solution</summary>
+<ul>
+<li><code>4</code> : <code>b</code> et <code>a</code> désignent le même tableau, <code>push</code> le modifie.</li>
+<li><code>4</code> : <code>c</code> est une copie, <code>push</code> ne touche que la copie.</li>
+<li><code>[undefined, undefined]</code> : les accolades forment un bloc sans <code>return</code>.</li>
+<li><code>"plein"</code> : un tableau vide est « vrai » en JavaScript.</li>
+</ul>
+</details>
+</div>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Laquelle de ces valeurs est considérée comme <em>vraie</em> en JavaScript ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a"><code>0</code></button>
+    <button type="button" data-k="b"><code>""</code> (chaîne vide)</button>
+    <button type="button" data-k="c"><code>[]</code> (tableau vide)</button>
+    <button type="button" data-k="d"><code>null</code></button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un tableau vide est un objet, et tout objet est « vrai » en JavaScript. C'est l'inverse de Python. Pour savoir si une liste contient des éléments, teste <code>list.length > 0</code>.</p>
+</div>
+<div class="quiz" data-answer="a">
+  <p class="quiz-q"><code>const x = { n: 1 }; const y = { n: 1 };</code> Que vaut <code>x === y</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a"><code>false</code> : ce sont deux objets distincts en mémoire.</button>
+    <button type="button" data-k="b"><code>true</code> : ils ont le même contenu.</button>
+    <button type="button" data-k="c">Une erreur.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong><code>===</code> compare les adresses des objets, pas leur contenu. Deux objets créés séparément ont deux adresses différentes, même s'ils se ressemblent.</p>
+</div>
+</section><!--/m01-->

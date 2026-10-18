@@ -1,0 +1,362 @@
+
+<!-- ===================================================== 07 -->
+<section class="module" id="m07" data-short="Le cycle de rendu">
+<header class="module-head"><span class="module-num">07</span><div><p class="module-kicker">Modèle mental</p><h2>Le cycle de rendu : ce qui se passe vraiment</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Savoir ce qui déclenche un rendu et ce qui se passe ensuite.</li>
+  <li>Comprendre pourquoi un rendu doit rester pur, et ce que fait StrictMode.</li>
+  <li>Décider où placer un état partagé (« remonter l'état »).</li>
+</ul></div>
+<p>Ce module est le plus important pour débugger. La plupart des bugs React viennent d'une idée fausse sur le moment où le code s'exécute.</p>
+
+<h3>Les quatre temps</h3>
+<ol class="steps">
+  <li><b>Déclenchement</b><span>premier affichage, ou un setter appelé quelque part.</span></li>
+  <li><b>Rendu</b><span>React appelle tes composants pour obtenir le nouveau JSX. Rien ne change encore à l'écran.</span></li>
+  <li><b>Commit</b><span>React compare avec le JSX précédent et applique au DOM les différences minimales.</span></li>
+  <li><b>Effets</b><span>une fois l'écran à jour, React exécute les <code>useEffect</code> concernés (module 08).</span></li>
+</ol>
+<p>Le rendu est un <strong>calcul</strong>, le commit est une <strong>écriture</strong>. Comme dans Terraform : <em>plan</em>, puis <em>apply</em>.</p>
+
+<h3>Qu'est-ce qui déclenche un nouveau rendu ?</h3>
+<ol>
+<li><strong>Son propre état change</strong> : un setter est appelé avec une nouvelle valeur.</li>
+<li><strong>Son parent se re-rend</strong> : par défaut, tous les enfants se re-rendent aussi, même si leurs props n'ont pas changé.</li>
+<li><strong>Un contexte qu'il lit change</strong> (module 10).</li>
+</ol>
+<p>Les props ne sont pas une cause à part : si les props d'un composant changent, c'est que son parent s'est re-rendu.</p>
+
+<div class="demo" id="demo-render">
+  <div class="demo-head"><span>Démo · qui se re-rend ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="demo-actions">
+      <button type="button" class="btn" data-set="app">App : setTheme()</button>
+      <button type="button" class="btn" data-set="list">TaskList : setFilter()</button>
+      <button type="button" class="btn" data-set="item2">TaskItem n°2 : setIsEditing()</button>
+    </div>
+    <ul class="rtree" aria-label="Arbre de composants">
+      <li><span class="rnode" data-node="app">App <em>état : theme</em> <b>1</b></span>
+        <ul>
+          <li><span class="rnode" data-node="header">Header <b>1</b></span></li>
+          <li><span class="rnode" data-node="list">TaskList <em>état : filter</em> <b>1</b></span>
+            <ul>
+              <li><span class="rnode" data-node="item1">TaskItem n°1 <b>1</b></span></li>
+              <li><span class="rnode" data-node="item2">TaskItem n°2 <em>état : isEditing</em> <b>1</b></span></li>
+              <li><span class="rnode" data-node="item3">TaskItem n°3 <b>1</b></span></li>
+            </ul>
+          </li>
+          <li><span class="rnode" data-node="footer">Footer <b>1</b></span></li>
+        </ul>
+      </li>
+    </ul>
+    <p class="demo-hint" data-out="explain" aria-live="polite">Clique sur un bouton. Les composants qui se re-rendent clignotent et leur compteur de rendus augmente.</p>
+  </div>
+</div>
+
+<h3>Re-rendre n'est pas repeindre</h3>
+<p>Un re-rendu, c'est l'appel de fonctions JavaScript. C'est généralement très rapide. Le DOM, lui, n'est modifié que là où le résultat diffère. N'essaie pas d'éviter les re-rendus « par principe » : optimise seulement quand tu mesures un vrai problème (module 09).</p>
+
+<h3>Un rendu doit être pur</h3>
+<p>Mêmes props, même état, même contexte : même JSX. Et aucun effet de bord pendant le calcul.</p>
+<figure class="code"><figcaption>Clock.jsx <span class="tag bad">impur</span></figcaption><pre><code class="language-jsx">let renders = 0;
+
+function Clock() {
+  renders++;                  // FAUX : modifie une variable extérieure
+  fetch("/api/ping");         // FAUX : appel réseau pendant le rendu
+  document.title = "Horloge"; // FAUX : touche au monde extérieur
+  return <p>{new Date().toLocaleTimeString()}</p>;
+}</code></pre></figure>
+<p>Les effets de bord ont deux places légitimes : les <strong>gestionnaires d'événements</strong> (en réponse à une action) et <strong><code>useEffect</code></strong> (pour se synchroniser avec l'extérieur).</p>
+<aside class="note key"><p class="label">À retenir</p>
+<p>En développement, <code>StrictMode</code> appelle volontairement tes composants <strong>deux fois</strong>, et monte-démonte-remonte tes effets, pour révéler les impuretés. Si tes <code>console.log</code> apparaissent en double, ce n'est pas un bug. En production, chaque rendu n'a lieu qu'une fois.</p>
+</aside>
+
+<h3>Où vit l'état ? Remonter l'état</h3>
+<p>Deux composants frères ont besoin de la même donnée : une barre de recherche écrit la requête, une liste la lit. Si l'état est dans <code>SearchBar</code>, <code>TaskList</code> ne peut pas le voir. Solution : le déplacer chez leur <strong>parent commun le plus proche</strong>.</p>
+<figure class="code"><figcaption>TasksPage.jsx</figcaption><pre><code class="language-jsx">function TasksPage() {
+  const [query, setQuery] = useState("");  // l'état vit chez le parent commun
+
+  return (
+    <>
+      <SearchBar value={query} onChange={setQuery} />  {/* écrit */}
+      <TaskList query={query} />                       {/* lit */}
+    </>
+  );
+}
+
+function SearchBar({ value, onChange }) {
+  return <input value={value} onChange={e => onChange(e.target.value)} />;
+}
+
+function TaskList({ query }) {
+  const visible = ALL_TASKS.filter(t =>
+    t.title.toLowerCase().includes(query.toLowerCase())
+  );
+  return <ul>{visible.map(t => <li key={t.id}>{t.title}</li>)}</ul>;
+}</code></pre></figure>
+<p>Règle : place l'état <strong>le plus bas possible</strong>, mais assez haut pour que tous ceux qui en ont besoin soient en dessous. Une seule source de vérité, comme une donnée partagée entre deux services backend : on lui donne un propriétaire unique au lieu de la dupliquer.</p>
+
+<h3>Comment React sait quel état appartient à qui</h3>
+<p>React associe l'état à la <strong>position</strong> du composant dans l'arbre, à son <strong>type</strong> et à sa <strong>key</strong>. Pas au nom de ta variable.</p>
+<figure class="code"><figcaption>Panel.jsx</figcaption><pre><code class="language-jsx">// Types différents à la même position → l'état de l'ancien est détruit
+{isEditing ? <EditForm /> : <ReadView />}
+
+// Même type, même position → l'état est CONSERVÉ, seules les props changent
+{isAdmin ? <Panel role="admin" /> : <Panel role="user" />}
+
+// Même type mais key différente → nouvel état
+<Panel key={userId} role="user" /></code></pre></figure>
+<p>Dernier point du modèle mental : chaque rendu a ses propres props, son propre état et ses propres fonctions. Une fonction créée pendant le rendu n°3 « voit » les valeurs du rendu n°3, pour toujours. Retiens-le, on s'en servira au module 08.</p>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Un parent se re-rend. Les props de son enfant sont identiques. L'enfant se re-rend-il ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Oui, par défaut tous les enfants se re-rendent avec leur parent.</button>
+    <button type="button" data-k="b">Non, React compare toujours les props avant.</button>
+    <button type="button" data-k="c">Seulement s'il a un état.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Par défaut, un re-rendu descend tout le sous-arbre. On peut l'éviter avec <code>memo</code> ou le React Compiler (module 09), mais ce n'est utile qu'en cas de lenteur mesurée : le DOM n'est de toute façon modifié que là où le résultat change.</p>
+</div>
+<div class="quiz" data-answer="b">
+  <p class="quiz-q"><code>Filters</code> et <code>ResultsTable</code> sont frères et ont besoin du même filtre. Où vit l'état ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Dans <code>Filters</code>, qui l'envoie à <code>ResultsTable</code>.</button>
+    <button type="button" data-k="b">Dans leur parent commun, qui le passe aux deux en props.</button>
+    <button type="button" data-k="c">Dans les deux, synchronisés avec un <code>useEffect</code>.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un frère ne peut pas passer de props à un autre frère. On remonte l'état chez le parent commun, qui donne la valeur aux deux et un callback à celui qui la modifie. Deux états synchronisés par un effet, c'est deux sources de vérité.</p>
+</div>
+</section><!--/m07-->
+
+<!-- ===================================================== 08 -->
+<section class="module" id="m08" data-short="useEffect">
+<header class="module-head"><span class="module-num">08</span><div><p class="module-kicker">Hooks · l'extérieur</p><h2>useEffect : se synchroniser avec l'extérieur</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Savoir quand un effet s'exécute, selon son tableau de dépendances.</li>
+  <li>Écrire un nettoyage pour chaque ressource ouverte.</li>
+  <li>Charger des données proprement, sans réponse périmée.</li>
+  <li>Reconnaître les effets inutiles, de loin l'erreur la plus fréquente.</li>
+</ul></div>
+
+<h3>À quoi sert un effet</h3>
+<p>Un effet sert à <strong>synchroniser</strong> ton composant avec un système qui n'est pas géré par React : le réseau, un timer, une API du navigateur, une connexion WebSocket, un widget tiers, le titre de l'onglet.</p>
+<p>Il s'exécute <strong>après</strong> que l'écran a été mis à jour. Le rendu reste donc pur, et l'effet fait le travail « sale » ensuite.</p>
+<figure class="code"><figcaption>ChatRoom.jsx</figcaption><pre><code class="language-jsx">import { useEffect } from "react";
+
+function ChatRoom({ roomId }) {
+  useEffect(() => {
+    // 1. Mise en place : s'exécute APRÈS l'affichage
+    const connection = createConnection(roomId);
+    connection.connect();
+
+    // 2. Nettoyage : s'exécute avant la prochaine exécution de l'effet, et au démontage
+    return () => connection.disconnect();
+  }, [roomId]); // 3. Dépendances : relancer seulement si roomId a changé
+
+  return <h1>Salon {roomId}</h1>;
+}</code></pre></figure>
+
+<h3>Le tableau de dépendances</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Écriture</th><th>L'effet s'exécute…</th><th>Usage</th></tr></thead>
+<tbody>
+<tr><td><code>useEffect(fn)</code></td><td>après <strong>chaque</strong> rendu</td><td>rare ; souvent un oubli</td></tr>
+<tr><td><code>useEffect(fn, [])</code></td><td>après le <strong>premier</strong> rendu seulement (le montage)</td><td>abonnement global, initialisation unique</td></tr>
+<tr><td><code>useEffect(fn, [a, b])</code></td><td>après le premier rendu, puis quand <code>a</code> ou <code>b</code> a changé</td><td>le cas normal</td></tr>
+</tbody></table></div>
+<p>« A changé » se vérifie par référence (<code>Object.is</code>), comme pour l'état. Choisis un mode, puis provoque des rendus et regarde le journal :</p>
+
+<div class="demo" id="demo-effect">
+  <div class="demo-head"><span>Démo · quand l'effet s'exécute-t-il ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Tableau de dépendances">
+      <button type="button" role="radio" aria-checked="false" data-mode="none">Pas de tableau</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="empty">[ ]</button>
+      <button type="button" role="radio" aria-checked="true" data-mode="deps">[userId]</button>
+    </div>
+    <figure class="code compact"><figcaption>Presence.jsx</figcaption><pre><code class="language-jsx" data-out="effect-code">useEffect(() => {
+  const conn = connect(userId);
+  return () => conn.disconnect();
+}, [userId]);</code></pre></figure>
+    <div class="demo-actions">
+      <button type="button" class="btn" data-act="rerender">Re-rendu (autre état modifié)</button>
+      <button type="button" class="btn" data-act="change">Changer userId</button>
+      <button type="button" class="btn ghost" data-act="toggle">Démonter</button>
+    </div>
+    <p class="demo-status">userId = <strong data-out="uid">1</strong> · connecté à : <strong data-out="conn">utilisateur 1</strong></p>
+  </div>
+  <div class="log" data-out="log" aria-live="polite"></div>
+</div>
+
+<h3>Le nettoyage</h3>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>La fonction de nettoyage, c'est ton <code>Dispose()</code>, ton bloc <code>using</code>, ton <code>__exit__</code> ou ton <code>finally</code>. Toute ressource ouverte dans un effet (connexion, abonnement, timer, écouteur d'événement) doit être refermée dans son nettoyage. Sinon : fuites mémoire, doublons, comportements fantômes.</p>
+</aside>
+<figure class="code"><figcaption>exemples de synchronisation</figcaption><pre><code class="language-jsx">// Titre de l'onglet synchronisé avec une valeur
+useEffect(() => {
+  document.title = `${unread} message(s) non lu(s)`;
+}, [unread]);
+
+// Écouteur d'événement du navigateur
+useEffect(() => {
+  function handleResize() {
+    setWidth(window.innerWidth);
+  }
+  window.addEventListener("resize", handleResize);
+  return () => window.removeEventListener("resize", handleResize);
+}, []);
+
+// Timer
+useEffect(() => {
+  const id = setInterval(() => setSeconds(s => s + 1), 1000); // forme fonction : pas besoin de seconds en dépendance
+  return () => clearInterval(id);
+}, []);</code></pre></figure>
+<aside class="note key"><p class="label">À retenir</p>
+<p>En développement, StrictMode monte le composant, le démonte, puis le remonte : ton effet s'exécute deux fois, avec un nettoyage entre les deux. Si un effet casse quand il est lancé deux fois, il lui manque un nettoyage. Ne désactive pas StrictMode pour « corriger ».</p>
+</aside>
+
+<h3>Charger des données</h3>
+<figure class="code"><figcaption>UserProfile.jsx</figcaption><pre><code class="language-jsx">function UserProfile({ userId }) {
+  // On mémorise POUR QUEL userId on a reçu une réponse
+  const [result, setResult] = useState({ userId: null, user: null, error: null });
+
+  useEffect(() => {
+    let ignore = false; // drapeau anti « réponse périmée »
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/users/${userId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`); // fetch ne lève rien sur un 404 / 500
+        const user = await res.json();
+        if (!ignore) setResult({ userId, user, error: null });
+      } catch (error) {
+        if (!ignore) setResult({ userId, user: null, error });
+      }
+    }
+
+    load(); // la fonction d'effet elle-même ne peut pas être async
+    return () => { ignore = true; }; // userId a changé avant la réponse ? on l'ignorera
+  }, [userId]);
+
+  // Valeur dérivée : tant que la réponse ne concerne pas le userId actuel, on charge
+  const isLoading = result.userId !== userId;
+
+  if (isLoading) return <p>Chargement…</p>;
+  if (result.error) return <p>Erreur : {result.error.message}</p>;
+  return <h2>{result.user.name}</h2>;
+}</code></pre></figure>
+<p>Pourquoi le drapeau <code>ignore</code> ? Tu cliques sur l'utilisateur 1 puis, vite, sur le 2. Les réponses peuvent arriver dans le désordre. Si celle du 1 arrive en dernier, sans le drapeau, tu afficherais le mauvais profil. Le nettoyage marque l'ancienne requête comme périmée.</p>
+<aside class="note key"><p class="label">À retenir</p>
+<p>C'est verbeux, et il manque encore le cache, les nouvelles tentatives et le rafraîchissement. C'est exactement ce que React Query fera pour toi, ton prochain sujet. Comprendre ce code te permettra de comprendre ce que la bibliothèque automatise.</p>
+</aside>
+
+<h3>Les pièges classiques</h3>
+<h4>1. La boucle infinie</h4>
+<figure class="code"><figcaption>boucles.jsx</figcaption><pre><code class="language-jsx">// FAUX : pas de tableau → l'effet suit chaque rendu, et provoque un rendu, etc.
+useEffect(() => {
+  setCount(count + 1);
+});
+
+// FAUX aussi : options est un NOUVEL objet à chaque rendu → dépendance toujours « changée »
+const options = { userId, includeArchived: false };
+useEffect(() => {
+  fetchTasks(options).then(setTasks);
+}, [options]);
+
+// JUSTE : dépendre de valeurs simples (chaînes, nombres, booléens)
+useEffect(() => {
+  fetchTasks({ userId, includeArchived: false }).then(setTasks);
+}, [userId]);</code></pre></figure>
+<h4>2. Les dépendances manquantes</h4>
+<p>Toute valeur du composant utilisée dans l'effet (props, état, fonctions déclarées dans le composant) doit figurer dans le tableau. Sinon l'effet travaille avec des valeurs d'un ancien rendu. La règle ESLint <code>react-hooks/exhaustive-deps</code> te le signale : écoute-la, et ne la fais jamais taire avec un commentaire <code>eslint-disable</code>.</p>
+<h4>3. La closure périmée</h4>
+<figure class="code"><figcaption>Stopwatch.jsx</figcaption><pre><code class="language-jsx">useEffect(() => {
+  const id = setInterval(() => {
+    setSeconds(seconds + 1); // FAUX : « seconds » est figé à la valeur du 1er rendu → bloqué à 1
+  }, 1000);
+  return () => clearInterval(id);
+}, []);
+
+// JUSTE : setSeconds(s => s + 1) lit toujours la valeur la plus récente</code></pre></figure>
+<h4>4. L'effet qui ne devrait pas exister</h4>
+<div class="compare">
+<figure class="code"><figcaption>Donnée dérivée <span class="tag bad">effet inutile</span></figcaption><pre><code class="language-jsx">const [fullName, setFullName] = useState("");
+
+useEffect(() => {
+  setFullName(`${first} ${last}`);
+}, [first, last]);
+// Un rendu de retard + un risque d'incohérence</code></pre></figure>
+<figure class="code"><figcaption>Calcul pendant le rendu <span class="tag good">correct</span></figcaption><pre><code class="language-jsx">const fullName = `${first} ${last}`;</code></pre></figure>
+</div>
+<div class="compare">
+<figure class="code"><figcaption>Action utilisateur <span class="tag bad">effet inutile</span></figcaption><pre><code class="language-jsx">const [submitted, setSubmitted] = useState(false);
+
+useEffect(() => {
+  if (submitted) postTask(form);
+}, [submitted, form]);</code></pre></figure>
+<figure class="code"><figcaption>Dans le gestionnaire <span class="tag good">correct</span></figcaption><pre><code class="language-jsx">async function handleSubmit(e) {
+  e.preventDefault();
+  await postTask(form);
+}</code></pre></figure>
+</div>
+<h4>5. L'effet async</h4>
+<p><code>useEffect(async () => …)</code> ne fonctionne pas : une fonction async renvoie une promesse, alors que React attend une fonction de nettoyage. Déclare une fonction async <strong>à l'intérieur</strong> de l'effet et appelle-la, comme dans <code>UserProfile</code>.</p>
+
+<aside class="note key"><p class="label">À retenir · as-tu besoin d'un effet ?</p>
+<ul>
+<li>Calculer une valeur à partir des props ou de l'état : <strong>non</strong>, calcule-la pendant le rendu.</li>
+<li>Réagir à un clic ou à une soumission : <strong>non</strong>, mets le code dans le gestionnaire.</li>
+<li>Remettre un état à zéro quand une prop change : <strong>souvent non</strong>, utilise une <code>key</code>.</li>
+<li>Se connecter à un système extérieur (API du navigateur, socket, timer, widget tiers) : <strong>oui</strong>.</li>
+<li>Charger des données : <strong>oui</strong> en React seul ; en pratique, une bibliothèque comme React Query ou le framework s'en charge.</li>
+</ul>
+</aside>
+<p>Deux noms à connaître sans t'y attarder : <code>useLayoutEffect</code> s'exécute avant que le navigateur peigne l'écran (rare, pour mesurer un élément) ; <code>useEffectEvent</code>, stable depuis React 19.2, permet de lire la dernière valeur d'une prop dans un effet sans la mettre dans les dépendances.</p>
+
+<div class="exercise"><p class="label">Exercice</p>
+<p>Écris un composant <code>WindowWidth</code> qui affiche la largeur de la fenêtre et se met à jour quand on la redimensionne. Ajoute un composant <code>DocumentTitle</code> qui reçoit un compteur en prop et l'affiche dans le titre de l'onglet. Pense aux nettoyages et aux dépendances.</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>WindowWidth.jsx et DocumentTitle.jsx</figcaption><pre><code class="language-jsx">function WindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    function handleResize() {
+      setWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize); // nettoyage
+  }, []); // l'écouteur n'a besoin d'être posé qu'une fois
+
+  return <p>Largeur : {width}px</p>;
+}
+
+function DocumentTitle({ count }) {
+  useEffect(() => {
+    document.title = `(${count}) TaskFlow`;
+  }, [count]); // relancé quand count change
+
+  return null; // ce composant n'affiche rien
+}</code></pre></figure>
+<p>Au module 11, tu transformeras <code>WindowWidth</code> en custom hook réutilisable.</p>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Avec <code>useEffect(fn, [])</code>, quand <code>fn</code> s'exécute-t-elle (en production) ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Après chaque rendu.</button>
+    <button type="button" data-k="b">Une seule fois, après le premier rendu ; son nettoyage au démontage.</button>
+    <button type="button" data-k="c">Avant le premier rendu.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un tableau vide signifie « aucune dépendance ne peut changer ». L'effet tourne donc après le montage, et son nettoyage au démontage. En développement, StrictMode le lance deux fois pour vérifier que le nettoyage est correct.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Lequel de ces besoins justifie vraiment un <code>useEffect</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Calculer le total d'un panier à partir de ses lignes.</button>
+    <button type="button" data-k="b">Envoyer un formulaire quand on clique sur « Valider ».</button>
+    <button type="button" data-k="c">S'abonner aux messages d'un WebSocket tant que le composant est affiché.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Le total se calcule pendant le rendu, l'envoi se fait dans le gestionnaire de clic. Seul l'abonnement WebSocket synchronise le composant avec un système extérieur, avec un nettoyage pour se désabonner.</p>
+</div>
+</section><!--/m08-->

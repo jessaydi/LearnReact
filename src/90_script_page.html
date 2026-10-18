@@ -1,0 +1,274 @@
+
+<script>window.Prism = window.Prism || {}; window.Prism.manual = true;</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-jsx.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Coloration syntaxique ---------- */
+  function highlight(el) {
+    try { if (window.Prism && Prism.highlightElement) Prism.highlightElement(el); } catch (e) {}
+  }
+  try { if (window.Prism && Prism.highlightAll) Prism.highlightAll(); } catch (e) {}
+
+  /* ---------- Boutons « Copier » ---------- */
+  function selectText(el) {
+    try {
+      var r = document.createRange(); r.selectNodeContents(el);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    } catch (e) {}
+  }
+  document.querySelectorAll("figure.code").forEach(function (fig) {
+    var cap = fig.querySelector("figcaption");
+    var code = fig.querySelector("pre code");
+    if (!cap || !code || fig.classList.contains("compact")) return;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "copy-btn"; b.textContent = "Copier";
+    b.addEventListener("click", function () {
+      var done = function () { b.textContent = "Copié"; setTimeout(function () { b.textContent = "Copier"; }, 1500); };
+      var fail = function () { selectText(code); b.textContent = "Texte sélectionné"; setTimeout(function () { b.textContent = "Copier"; }, 1800); };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code.textContent).then(done, fail);
+        } else { fail(); }
+      } catch (e) { fail(); }
+    });
+    cap.appendChild(b);
+  });
+
+  /* ---------- Quiz ---------- */
+  document.querySelectorAll(".quiz").forEach(function (q) {
+    var answer = q.getAttribute("data-answer");
+    var why = q.querySelector(".quiz-why");
+    var verdict = why ? why.querySelector(".verdict") : null;
+    var buttons = q.querySelectorAll(".quiz-opts button");
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        buttons.forEach(function (b) { b.classList.remove("is-right", "is-wrong"); b.removeAttribute("aria-pressed"); });
+        var right = btn.getAttribute("data-k") === answer;
+        btn.setAttribute("aria-pressed", "true");
+        if (right) { btn.classList.add("is-right"); }
+        else {
+          btn.classList.add("is-wrong");
+          var good = q.querySelector('.quiz-opts button[data-k="' + answer + '"]');
+          if (good) good.classList.add("is-right");
+        }
+        if (verdict) { verdict.textContent = right ? "Bonne réponse." : "Pas tout à fait."; verdict.className = "verdict " + (right ? "ok" : "ko"); }
+        if (why) why.hidden = false;
+      });
+    });
+  });
+
+  /* ---------- Progression (navigateur local uniquement) ---------- */
+  var KEY = "react-backend-course-read-v1";
+  var read = {};
+  try { read = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { read = {}; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(read)); } catch (e) {} }
+  var modules = Array.prototype.slice.call(document.querySelectorAll("section.module"));
+  var totalEl = document.getElementById("progress-total");
+  if (totalEl) totalEl.textContent = modules.length;
+  function renderProgress() {
+    var n = 0;
+    modules.forEach(function (m) {
+      var id = m.id, isRead = !!read[id];
+      if (isRead) n++;
+      var link = document.querySelector('.toc-list a[data-id="' + id + '"]');
+      if (link) link.classList.toggle("is-read", isRead);
+      var btn = m.querySelector(".mark-read");
+      if (btn) {
+        btn.setAttribute("aria-pressed", isRead ? "true" : "false");
+        btn.textContent = isRead ? "Module lu ✓" : "Marquer ce module comme lu";
+      }
+    });
+    var c = document.getElementById("progress-count"); if (c) c.textContent = n;
+    var f = document.getElementById("progress-fill"); if (f) f.style.width = (modules.length ? (n / modules.length) * 100 : 0) + "%";
+  }
+  document.querySelectorAll(".mark-read").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-id");
+      if (read[id]) delete read[id]; else read[id] = true;
+      save(); renderProgress();
+    });
+  });
+  renderProgress();
+
+  /* ---------- Sommaire : module courant + repli sur mobile ---------- */
+  var toc = document.getElementById("toc");
+  try { if (toc && window.matchMedia("(max-width: 980px)").matches) toc.open = false; } catch (e) {}
+  if (toc) toc.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a");
+    try { if (a && window.matchMedia("(max-width: 980px)").matches) toc.open = false; } catch (err) {}
+  });
+  if ("IntersectionObserver" in window) {
+    var links = {};
+    document.querySelectorAll(".toc-list a").forEach(function (a) { links[a.getAttribute("data-id")] = a; });
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          if (current && links[current]) links[current].classList.remove("is-current");
+          current = en.target.id;
+          if (links[current]) links[current].classList.add("is-current");
+        }
+      });
+    }, { rootMargin: "-35% 0px -60% 0px" });
+    modules.forEach(function (m) { io.observe(m); });
+  }
+
+  /* ---------- Utilitaire de journal ---------- */
+  function logger(box) {
+    return {
+      clear: function () { box.innerHTML = ""; },
+      add: function (cls, text) {
+        var empty = box.querySelector(".l-empty"); if (empty) empty.remove();
+        var p = document.createElement("p"); p.className = cls; p.textContent = text;
+        box.appendChild(p); box.scrollTop = box.scrollHeight;
+      }
+    };
+  }
+
+  /* ---------- Démo 1 : let contre useState ---------- */
+  (function () {
+    var root = document.getElementById("demo-state"); if (!root) return;
+    var out = function (k) { return root.querySelector('[data-out="' + k + '"]'); };
+    var log = logger(out("log"));
+    var letVar = 0, letShown = 0, stateVal = 0, renders = 1;
+    function paint() {
+      out("let-display").textContent = letShown;
+      out("let-value").textContent = letVar;
+      out("state-display").textContent = stateVal;
+      out("state-renders").textContent = renders;
+    }
+    root.addEventListener("click", function (e) {
+      var t = e.target.closest("[data-act]"); if (!t) return;
+      var act = t.getAttribute("data-act");
+      if (act === "let-click") {
+        letVar++;
+        log.add("l-let", "[let] clic : count = " + letVar + " dans la variable. React n'est pas prévenu, l'écran affiche toujours " + letShown + ".");
+      } else if (act === "let-rerender") {
+        letVar = 0; letShown = 0;
+        log.add("l-let", "[let] re-rendu : Counter() est rappelée, « let count = 0 » s'exécute à nouveau. La variable repart de 0.");
+      } else if (act === "state-click") {
+        stateVal++; renders++;
+        log.add("l-state", "[useState] setCount(" + stateVal + ") → React planifie un rendu → Counter() rappelée, useState renvoie " + stateVal + " → l'écran affiche " + stateVal + ".");
+      } else if (act === "reset") {
+        letVar = 0; letShown = 0; stateVal = 0; renders = 1; log.clear();
+        log.add("l-empty", "Le journal des événements s'affiche ici.");
+      }
+      paint();
+    });
+    paint();
+  })();
+
+  /* ---------- Démo 2 : qui se re-rend ? ---------- */
+  (function () {
+    var root = document.getElementById("demo-render"); if (!root) return;
+    var explain = root.querySelector('[data-out="explain"]');
+    var counts = {};
+    root.querySelectorAll(".rnode").forEach(function (n) { counts[n.getAttribute("data-node")] = 1; });
+    var texts = {
+      app: "App change d'état : App et TOUS ses descendants se re-rendent, même Footer, dont les props n'ont pas changé.",
+      list: "TaskList change d'état : TaskList et ses trois TaskItem se re-rendent. App, Header et Footer ne bougent pas.",
+      item2: "Seul TaskItem n°2 se re-rend : l'état est local, ni ses frères ni son parent ne sont concernés."
+    };
+    function flash(node) {
+      node.classList.remove("is-flash"); void node.offsetWidth; node.classList.add("is-flash");
+    }
+    root.addEventListener("click", function (e) {
+      var setBtn = e.target.closest("[data-set]");
+      var resetBtn = e.target.closest('[data-act="reset"]');
+      if (resetBtn) {
+        root.querySelectorAll(".rnode").forEach(function (n) {
+          var k = n.getAttribute("data-node"); counts[k] = 1; n.querySelector("b").textContent = 1; n.classList.remove("is-flash");
+        });
+        explain.textContent = "Clique sur un bouton. Les composants qui se re-rendent clignotent et leur compteur de rendus augmente.";
+        return;
+      }
+      if (!setBtn) return;
+      var key = setBtn.getAttribute("data-set");
+      var start = root.querySelector('.rnode[data-node="' + key + '"]'); if (!start) return;
+      var li = start.closest("li");
+      li.querySelectorAll(".rnode").forEach(function (n) {
+        var k = n.getAttribute("data-node"); counts[k] = (counts[k] || 1) + 1;
+        n.querySelector("b").textContent = counts[k]; flash(n);
+      });
+      explain.textContent = texts[key] || "";
+    });
+  })();
+
+  /* ---------- Démo 3 : quand l'effet s'exécute-t-il ? ---------- */
+  (function () {
+    var root = document.getElementById("demo-effect"); if (!root) return;
+    var out = function (k) { return root.querySelector('[data-out="' + k + '"]'); };
+    var log = logger(out("log"));
+    var codeEl = out("effect-code");
+    var toggleBtn = root.querySelector('[data-act="toggle"]');
+    var CODE = {
+      none: "useEffect(() => {\n  const conn = connect(userId);\n  return () => conn.disconnect();\n}); // pas de tableau",
+      empty: "useEffect(() => {\n  const conn = connect(userId);\n  return () => conn.disconnect();\n}, []);",
+      deps: "useEffect(() => {\n  const conn = connect(userId);\n  return () => conn.disconnect();\n}, [userId]);"
+    };
+    var s = { mode: "deps", mounted: true, userId: 1, conn: null, renderN: 0 };
+
+    function status() {
+      out("uid").textContent = s.userId;
+      var c = out("conn");
+      c.textContent = s.conn === null ? "personne" : "utilisateur " + s.conn;
+      c.classList.toggle("warn", s.conn !== null && s.conn !== s.userId);
+      toggleBtn.textContent = s.mounted ? "Démonter" : "Monter";
+    }
+    function render() { s.renderN++; log.add("l-render", "rendu n°" + s.renderN + " (userId = " + s.userId + ")"); }
+    function effect() { s.conn = s.userId; log.add("l-effect", "effet : connexion à l'utilisateur " + s.userId); }
+    function cleanup() { if (s.conn !== null) { log.add("l-clean", "nettoyage : déconnexion de l'utilisateur " + s.conn); s.conn = null; } }
+    function mount() { s.mounted = true; s.renderN = 0; log.add("l-skip", "— montage du composant —"); render(); effect(); }
+    function setMode(m) {
+      s.mode = m; s.userId = 1; s.conn = null;
+      root.querySelectorAll(".seg button").forEach(function (b) { b.setAttribute("aria-checked", b.getAttribute("data-mode") === m ? "true" : "false"); });
+      codeEl.textContent = CODE[m]; highlight(codeEl);
+      log.clear(); mount(); status();
+    }
+
+    root.addEventListener("click", function (e) {
+      var modeBtn = e.target.closest("[data-mode]");
+      if (modeBtn) { setMode(modeBtn.getAttribute("data-mode")); return; }
+      var t = e.target.closest("[data-act]"); if (!t) return;
+      var act = t.getAttribute("data-act");
+      if (act === "reset") { setMode(s.mode); return; }
+      if (act === "toggle") {
+        if (s.mounted) { log.add("l-skip", "— démontage du composant —"); cleanup(); s.mounted = false; }
+        else { mount(); }
+        status(); return;
+      }
+      if (!s.mounted) {
+        if (act === "change") s.userId++;
+        log.add("l-skip", "Le composant est démonté : aucun rendu, aucun effet.");
+        status(); return;
+      }
+      if (act === "rerender") {
+        render();
+        if (s.mode === "none") { cleanup(); effect(); }
+        else if (s.mode === "empty") { log.add("l-skip", "dépendances [] inchangées → effet ignoré"); }
+        else { log.add("l-skip", "dépendances [" + s.userId + "] identiques à [" + s.userId + "] → effet ignoré"); }
+      } else if (act === "change") {
+        var prev = s.userId; s.userId++;
+        render();
+        if (s.mode === "none") { cleanup(); effect(); }
+        else if (s.mode === "empty") {
+          log.add("l-skip", "dépendances [] inchangées → effet ignoré");
+          log.add("l-warn", "bug : toujours connecté à l'utilisateur " + s.conn + " alors que userId vaut " + s.userId + ". userId manque dans les dépendances.");
+        } else {
+          log.add("l-skip", "userId a changé (" + prev + " → " + s.userId + ") → nettoyage puis nouvel effet");
+          cleanup(); effect();
+        }
+      }
+      status();
+    });
+    setMode("deps");
+  })();
+})();
+</script>
