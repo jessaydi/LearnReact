@@ -1,0 +1,352 @@
+
+<!-- ===================================================== 15 -->
+<section class="module" id="m15" data-short="Lire un projet, ajouter une feature">
+<header class="module-head"><span class="module-num">15</span><div><p class="module-kicker">Pratique</p><h2>Lire un projet inconnu et y ajouter une fonctionnalité</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Savoir dans quel ordre lire un projet React existant.</li>
+  <li>Suivre une donnée de l'écran jusqu'à l'API, sur un vrai cas.</li>
+  <li>Décrire n'importe quel composant avec cinq questions.</li>
+  <li>Ajouter une fonctionnalité en choisissant le bon endroit pour l'état.</li>
+</ul></div>
+<p>Ce module rassemble tout le cours. Tu arrives sur un projet que tu n'as pas écrit : des centaines de fichiers, des noms que tu ne connais pas. L'objectif n'est pas de tout lire, mais de savoir où regarder.</p>
+
+<h3>L'ordre de lecture</h3>
+<ol class="steps">
+  <li><b>package.json</b><span>identifie la pile technique avant de lire une seule ligne de code.</span></li>
+  <li><b>main.jsx</b><span>les providers globaux disent quels services sont disponibles partout.</span></li>
+  <li><b>Les routes</b><span>la carte URL → page : les écrans de l'application.</span></li>
+  <li><b>Une page</b><span>suis une donnée de bout en bout, de l'écran à l'API.</span></li>
+</ol>
+
+<h4>1. Reconnaître la pile dans package.json</h4>
+<p>Les dépendances te disent quels outils le projet utilise, donc quels motifs tu vas croiser :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Dépendance</th><th>Ce qu'elle t'apprend</th></tr></thead>
+<tbody>
+<tr><td><code>react-router</code>, <code>@tanstack/react-router</code></td><td>Routage côté client : URL → page.</td></tr>
+<tr><td><code>next</code></td><td>Framework Next.js : routage par fichiers, rendu serveur, Server Components.</td></tr>
+<tr><td><code>@tanstack/react-query</code></td><td>Données serveur avec cache : cherche des <code>useQuery</code> et <code>useMutation</code>.</td></tr>
+<tr><td><code>zustand</code>, <code>@reduxjs/toolkit</code></td><td>État global hors de React (stores).</td></tr>
+<tr><td><code>react-hook-form</code>, <code>zod</code></td><td>Formulaires et validation de schémas.</td></tr>
+<tr><td><code>axios</code>, <code>ky</code></td><td>Client HTTP à la place de <code>fetch</code>.</td></tr>
+<tr><td><code>tailwindcss</code>, fichiers <code>*.module.css</code>, <code>styled-components</code></td><td>Façon d'écrire les styles.</td></tr>
+<tr><td><code>vitest</code>, <code>@testing-library/react</code>, <code>playwright</code></td><td>Tests de composants, tests de bout en bout.</td></tr>
+</tbody></table></div>
+
+<h4>2. Lire les providers de main.jsx</h4>
+<figure class="code"><figcaption>src/main.jsx · un projet typique</figcaption><pre><code class="language-jsx">createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>  {/* données serveur (React Query) */}
+      <AuthProvider>                            {/* utilisateur connecté : useAuth() */}
+        <ThemeProvider>                         {/* thème clair / sombre : useTheme() */}
+          <RouterProvider router={router} />    {/* la page affichée dépend de l'URL */}
+        </ThemeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </StrictMode>
+);</code></pre></figure>
+<p>Chaque provider est un contexte (module 10). En lisant cette pile, tu sais ce que n'importe quel composant peut demander : <code>useAuth()</code>, <code>useTheme()</code>, et des requêtes React Query.</p>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>Cette pile joue le rôle de la configuration de démarrage d'une API : l'enregistrement des services et des middlewares, dans l'ordre. C'est le premier fichier à lire pour savoir de quoi dispose le reste du code.</p>
+</aside>
+
+<h4>3. Lire les routes</h4>
+<figure class="code"><figcaption>src/router.jsx · avec React Router</figcaption><pre><code class="language-jsx">const router = createBrowserRouter([
+  { path: "/", element: <HomePage /> },
+  { path: "/tasks", element: <TasksPage /> },
+  { path: "/tasks/:taskId", element: <TaskDetailPage /> }, // :taskId = paramètre d'URL
+]);</code></pre></figure>
+<p>C'est la table de routage de l'application : chaque URL pointe vers un composant de page. Pour un bug signalé sur « la page des tâches », tu sais maintenant quel fichier ouvrir en premier.</p>
+
+<h3>Suivre une donnée : remonter la piste</h3>
+<p>Un bug réel, et la façon de le traquer. On part de l'écran et on remonte, fichier par fichier, en se posant toujours la même question : <strong>d'où vient cette valeur ?</strong></p>
+
+<div class="demo trace" id="demo-trace">
+  <div class="demo-head"><span>Démo · remonter la piste d'un bug</span><span class="trace-pos" data-out="pos">Étape 1 / 5</span></div>
+  <div class="demo-body">
+    <p class="trace-bug"><b>Le bug</b> L'en-tête affiche « 3 tâches restantes » alors qu'une des trois tâches est terminée.</p>
+    <div class="trace-step" data-step="1">
+      <p class="trace-file">src/components/Header.jsx</p>
+      <figure class="code"><figcaption>Header.jsx</figcaption><pre><code class="language-jsx">export default function Header({ remaining }) {
+  return <p className="count">{remaining} tâches restantes</p>;
+}</code></pre></figure>
+      <p><b>Ce qu'on observe.</b> Dans les DevTools, la prop <code>remaining</code> de Header vaut 3. Le composant affiche fidèlement ce qu'il reçoit.</p>
+      <p><b>Conclusion.</b> Le bug n'est pas ici : la valeur arrive déjà fausse. Question suivante : qui rend Header ? Les DevTools répondent « rendered by AppLayout ».</p>
+    </div>
+    <div class="trace-step" data-step="2" hidden>
+      <p class="trace-file">src/components/AppLayout.jsx</p>
+      <figure class="code"><figcaption>AppLayout.jsx</figcaption><pre><code class="language-jsx">import { useTaskStats } from "../hooks/useTaskStats";
+
+export default function AppLayout({ children }) {
+  const stats = useTaskStats();
+
+  return (
+    <>
+      <Header remaining={stats.remaining} />
+      <main>{children}</main>
+    </>
+  );
+}</code></pre></figure>
+      <p><b>Ce qu'on observe.</b> AppLayout ne calcule rien : il transmet <code>stats.remaining</code>, qui vient d'un custom hook.</p>
+      <p><b>Conclusion.</b> On ouvre <code>useTaskStats</code>, sans s'attarder sur le reste du fichier.</p>
+    </div>
+    <div class="trace-step" data-step="3" hidden>
+      <p class="trace-file">src/hooks/useTaskStats.js</p>
+      <figure class="code"><figcaption>useTaskStats.js</figcaption><pre><code class="language-jsx">import { useTasks } from "./useTasks";
+
+export function useTaskStats() {
+  const { tasks } = useTasks();
+  return {
+    total: tasks.length,
+    remaining: tasks.length,        // ← compte TOUTES les tâches
+  };
+}</code></pre></figure>
+      <p><b>Ce qu'on observe.</b> <code>remaining</code> vaut <code>tasks.length</code>, exactement comme <code>total</code>. Une tâche terminée est comptée comme restante.</p>
+      <p><b>Conclusion.</b> C'est probablement le bug. Mais avant de corriger, on vérifie que les données d'entrée sont justes : si l'API renvoyait toutes les tâches à « non terminée », le calcul ne serait pas en cause.</p>
+    </div>
+    <div class="trace-step" data-step="4" hidden>
+      <p class="trace-file">Onglet Réseau · GET /api/tasks</p>
+      <pre class="dt-json">[
+  { "id": 1, "title": "Lire",   "done": true },
+  { "id": 2, "title": "Coder",  "done": false },
+  { "id": 3, "title": "Tester", "done": false }
+]</pre>
+      <p><b>Ce qu'on observe.</b> L'API renvoie bien une tâche terminée, avec le champ <code>done</code> attendu.</p>
+      <p><b>Conclusion.</b> Les données sont justes, le contrat aussi : le bug est bien dans le calcul de <code>useTaskStats</code>.</p>
+    </div>
+    <div class="trace-step" data-step="5" hidden>
+      <p class="trace-file">La correction · src/hooks/useTaskStats.js</p>
+      <figure class="code"><figcaption>useTaskStats.js <span class="tag good">corrigé</span></figcaption><pre><code class="language-jsx">export function useTaskStats() {
+  const { tasks } = useTasks();
+  return {
+    total: tasks.length,
+    remaining: tasks.filter(t => !t.done).length,
+  };
+}</code></pre></figure>
+      <p><b>On vérifie.</b> L'en-tête affiche « 2 tâches restantes ». On cherche ensuite qui d'autre utilise <code>useTaskStats</code> (une recherche dans le projet) : la pastille du menu, par exemple, était fausse elle aussi et se trouve corrigée du même coup.</p>
+      <p><b>Ce qu'il faut retenir.</b> On a traversé quatre fichiers sans en lire un seul en entier. À chaque étape, une seule question : d'où vient cette valeur ?</p>
+    </div>
+    <div class="demo-actions trace-nav">
+      <button type="button" class="btn ghost" data-act="prev">Étape précédente</button>
+      <button type="button" class="btn" data-act="next">Étape suivante</button>
+    </div>
+  </div>
+</div>
+
+<h3>La fiche d'identité d'un composant</h3>
+<p>Pour comprendre n'importe quel composant, sans tout lire, réponds à cinq questions. C'est aussi un excellent prompt à donner à une IA (module 16).</p>
+<ol class="steps five">
+  <li><b>Ses props</b><span>que reçoit-il de son parent ?</span></li>
+  <li><b>Son état</b><span>que mémorise-t-il lui-même ?</span></li>
+  <li><b>Ses contextes et hooks</b><span>que va-t-il chercher ailleurs ?</span></li>
+  <li><b>Ses effets</b><span>que fait-il vers l'extérieur ?</span></li>
+  <li><b>Son affichage</b><span>que montre-t-il, et sous quelles conditions ?</span></li>
+</ol>
+<div class="exercise"><p class="label">Exercice · remplis la fiche</p>
+<figure class="code"><figcaption>TaskDetail.jsx</figcaption><pre><code class="language-jsx">export default function TaskDetail({ taskId, onClose }) {
+  const { user } = useAuth();
+  const { task, isLoading } = useTask(taskId);
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    document.title = task ? task.title : "TaskFlow";
+  }, [task]);
+
+  if (isLoading) return <Spinner />;
+
+  return (
+    <aside>
+      <h2>{task.title}</h2>
+      {task.ownerId === user.id && (
+        <button onClick={() => setIsEditing(true)}>Modifier</button>
+      )}
+      {isEditing && <EditTaskForm task={task} onDone={() => setIsEditing(false)} />}
+      <button onClick={onClose}>Fermer</button>
+    </aside>
+  );
+}</code></pre></figure>
+<details class="solution"><summary>Voir la solution</summary>
+<ol>
+<li><strong>Props</strong> : <code>taskId</code> (quelle tâche afficher) et <code>onClose</code> (un callback pour fermer le panneau).</li>
+<li><strong>État</strong> : <code>isEditing</code>, qui dit si le formulaire de modification est ouvert.</li>
+<li><strong>Contextes et hooks</strong> : <code>useAuth()</code> pour l'utilisateur connecté, <code>useTask(taskId)</code> pour charger la tâche.</li>
+<li><strong>Effets</strong> : il synchronise le titre de l'onglet avec le titre de la tâche.</li>
+<li><strong>Affichage</strong> : un indicateur pendant le chargement ; sinon le titre, un bouton « Modifier » seulement si l'utilisateur est propriétaire de la tâche, le formulaire si on est en mode édition, et un bouton « Fermer ».</li>
+</ol>
+</details>
+</div>
+
+<h3>Ajouter une fonctionnalité, pas à pas</h3>
+<p>La demande : « ajouter une case pour masquer les tâches terminées ». Voici le composant existant :</p>
+<figure class="code"><figcaption>TaskList.jsx · avant</figcaption><pre><code class="language-jsx">function TaskList({ tasks, onToggle }) {
+  return (
+    <ul>
+      {tasks.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} />)}
+    </ul>
+  );
+}</code></pre></figure>
+<p>On avance en cinq questions, toujours les mêmes :</p>
+<ol>
+<li><strong>Qu'est-ce qui existe déjà ?</strong> <code>TaskList</code> reçoit les tâches en prop et les affiche toutes. Rien à charger, rien à modifier côté données.</li>
+<li><strong>Quelle nouvelle information faut-il mémoriser ?</strong> Un booléen : « masquer les terminées ».</li>
+<li><strong>Où vit cette information ?</strong> Qui en a besoin ? Seulement <code>TaskList</code>. Donc un état local.</li>
+<li><strong>Qu'est-ce qui se calcule ?</strong> La liste affichée : c'est une valeur dérivée, pas un nouvel état, et pas un effet.</li>
+<li><strong>Quels cas limites ?</strong> Une liste vide une fois filtrée.</li>
+</ol>
+<figure class="code"><figcaption>TaskList.jsx · après</figcaption><pre><code class="language-jsx">function TaskList({ tasks, onToggle }) {
+  // 3. Une information utile à TaskList seule : état local
+  const [hideDone, setHideDone] = useState(false);
+
+  // 4. La liste affichée est dérivée : pas de nouvel état, pas d'effet
+  const visible = hideDone ? tasks.filter(t => !t.done) : tasks;
+
+  return (
+    <>
+      <label>
+        <input
+          type="checkbox"
+          checked={hideDone}
+          onChange={e => setHideDone(e.target.checked)}
+        />
+        Masquer les tâches terminées
+      </label>
+
+      {/* 5. Le cas vide */}
+      {visible.length === 0 ? (
+        <p>Rien à afficher.</p>
+      ) : (
+        <ul>
+          {visible.map(t => <TaskItem key={t.id} task={t} onToggle={onToggle} />)}
+        </ul>
+      )}
+    </>
+  );
+}</code></pre></figure>
+<p>La demande évolue souvent. Si l'en-tête doit aussi connaître ce réglage, l'état remonte chez le parent commun. S'il doit survivre au rechargement de la page, on le persiste avec <code>useLocalStorage</code> (module 11), ou dans l'URL (<code>?hideDone=1</code>) pour qu'un lien partagé conserve le filtre.</p>
+
+<h3>Où mettre cet état ?</h3>
+<p>C'est la question qui revient à chaque fonctionnalité. Réponds pour une donnée précise :</p>
+<div class="decide" data-decide>
+  <p class="label">Aide à la décision · où vit cette donnée ?</p>
+  <ol class="dq-trail" data-out="trail"></ol>
+  <div class="dq" data-node="start">
+    <p class="dq-q">Cette donnée vient-elle du serveur (une liste de tâches, un profil, des statistiques) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-server">Oui</button><button type="button" class="btn ghost" data-go="q2">Non</button></div>
+  </div>
+  <div class="dq" data-node="q2" hidden>
+    <p class="dq-q">Doit-elle survivre au rechargement de la page, ou être partageable par un lien ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-url">Oui</button><button type="button" class="btn ghost" data-go="q3">Non</button></div>
+  </div>
+  <div class="dq" data-node="q3" hidden>
+    <p class="dq-q">Un seul composant s'en sert-il ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-local">Oui</button><button type="button" class="btn ghost" data-go="q4">Non</button></div>
+  </div>
+  <div class="dq" data-node="q4" hidden>
+    <p class="dq-q">Les composants qui s'en servent sont-ils proches (un parent commun à un ou deux niveaux) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-lift">Oui</button><button type="button" class="btn ghost" data-go="q5">Non</button></div>
+  </div>
+  <div class="dq" data-node="q5" hidden>
+    <p class="dq-q">La valeur change-t-elle rarement (thème, utilisateur connecté, langue) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-context">Oui</button><button type="button" class="btn ghost" data-go="r-store">Non</button></div>
+  </div>
+  <div class="dq dr" data-node="r-server" hidden><p class="dr-t">Un cache de données serveur</p><p>React Query (ou le chargement du framework). Pas de copie dans un <code>useState</code> : plusieurs copies finissent par diverger.</p></div>
+  <div class="dq dr" data-node="r-url" hidden><p class="dr-t">L'URL ou le stockage du navigateur</p><p>Dans l'URL (<code>?filter=done</code>) pour un lien partageable ; dans <code>localStorage</code> (<code>useLocalStorage</code>) pour une préférence personnelle.</p></div>
+  <div class="dq dr" data-node="r-local" hidden><p class="dr-t">Un état local</p><p><code>useState</code> dans ce composant. Place l'état le plus bas possible.</p></div>
+  <div class="dq dr" data-node="r-lift" hidden><p class="dr-t">Remonter l'état</p><p>Chez le parent commun le plus proche, qui passe la valeur et un callback en props (module 07).</p></div>
+  <div class="dq dr" data-node="r-context" hidden><p class="dr-t">Un contexte</p><p>Un Provider et un hook <code>useXxx</code> avec garde-fou (module 10).</p></div>
+  <div class="dq dr" data-node="r-store" hidden><p class="dr-t">Un store, si le projet en a un</p><p>Un état lu partout et souvent modifié : Zustand ou Redux Toolkit, si le projet en utilise déjà un. Sinon, commence par remonter l'état et ne change d'outil qu'en cas de vraie difficulté.</p></div>
+  <button type="button" class="btn ghost small" data-act="restart">Recommencer</button>
+</div>
+
+<aside class="note key"><p class="label">À retenir · avant de commiter</p>
+<ul>
+<li>La console est propre : aucune erreur, aucun avertissement de <code>key</code>.</li>
+<li>Aucun état n'est modifié sur place.</li>
+<li>Les tableaux de dépendances sont complets et le linter ne signale rien.</li>
+<li>Aucune valeur dérivable n'est stockée dans un état ni calculée dans un effet.</li>
+<li>Les cas limites sont gérés : liste vide, chargement, erreur.</li>
+<li>Tu as suivi les conventions déjà présentes dans le projet.</li>
+</ul>
+</aside>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Lis un projet dans cet ordre : <code>package.json</code>, <code>main.jsx</code>, les routes, puis une page.</li>
+<li>Pour un bug, pars de l'écran et remonte : d'où vient cette valeur ? Composant, parent, hook, API.</li>
+<li>Un composant se résume en cinq questions : props, état, contextes et hooks, effets, affichage.</li>
+<li>Pour une fonctionnalité : ce qui existe, ce qu'il faut mémoriser, où, ce qui se calcule, les cas limites.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice · découper et ajouter</p>
+<p>Reprends le <code>TodoApp</code> du module 05. Découpe-le en trois composants frères sous un même parent : <code>Header</code> (affiche le nombre de tâches restantes), <code>AddTaskForm</code> et <code>TaskList</code>. Ajoute un bouton « Tout cocher » dans <code>Header</code>. Où vit l'état ?</p>
+<details class="solution"><summary>Voir la solution</summary>
+<p>Les trois composants ont besoin des tâches : l'état vit chez leur parent commun, qui passe les données et des callbacks.</p>
+<figure class="code"><figcaption>TodoApp.jsx</figcaption><pre><code class="language-jsx">export default function TodoApp() {
+  const [tasks, setTasks] = useState([]);
+  const remaining = tasks.filter(t => !t.done).length;
+
+  const addTask = title =>
+    setTasks(ts => [...ts, { id: crypto.randomUUID(), title, done: false }]);
+  const toggleTask = id =>
+    setTasks(ts => ts.map(t => (t.id === id ? { ...t, done: !t.done } : t)));
+  const completeAll = () =>
+    setTasks(ts => ts.map(t => ({ ...t, done: true })));
+
+  return (
+    <>
+      <Header remaining={remaining} onCompleteAll={completeAll} />
+      <AddTaskForm onAdd={addTask} />
+      <TaskList tasks={tasks} onToggle={toggleTask} />
+    </>
+  );
+}
+
+function Header({ remaining, onCompleteAll }) {
+  return (
+    <header>
+      <p>{remaining} restante(s)</p>
+      <button onClick={onCompleteAll} disabled={remaining === 0}>Tout cocher</button>
+    </header>
+  );
+}
+
+function AddTaskForm({ onAdd }) {
+  const [draft, setDraft] = useState(""); // le brouillon ne concerne que le formulaire
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (draft.trim()) onAdd(draft.trim());
+    setDraft("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={draft} onChange={e => setDraft(e.target.value)} />
+      <button type="submit">Ajouter</button>
+    </form>
+  );
+}</code></pre></figure>
+<p>Le brouillon <code>draft</code> reste local à <code>AddTaskForm</code> : personne d'autre n'en a besoin. Place l'état le plus bas possible.</p>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">La liste des tâches vient de l'API et trois pages l'affichent. Où la garder ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Un <code>useState</code> dans chaque page, chacune avec son <code>fetch</code>.</button>
+    <button type="button" data-k="b">Dans un cache de données serveur comme React Query.</button>
+    <button type="button" data-k="c">Dans une variable globale JavaScript.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Les données serveur ont des besoins propres : cache partagé, rafraîchissement, invalidation après une modification. C'est exactement le rôle de React Query. Plusieurs copies dans des états locaux finissent par diverger.</p>
+</div>
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Tu arrives sur un projet inconnu. Quel fichier ouvres-tu en premier pour savoir si le projet utilise React Query ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a"><code>package.json</code>.</button>
+    <button type="button" data-k="b"><code>App.jsx</code>.</button>
+    <button type="button" data-k="c">Le plus gros fichier de <code>components/</code>.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Les dépendances listent les outils du projet. <code>@tanstack/react-query</code> dans <code>package.json</code> te dit de chercher des <code>useQuery</code>, et <code>main.jsx</code> confirmera avec un <code>QueryClientProvider</code>.</p>
+</div>
+</section><!--/m15-->

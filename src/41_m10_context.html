@@ -1,0 +1,269 @@
+
+<!-- ===================================================== 10 -->
+<section class="module" id="m10" data-short="Context et useContext">
+<header class="module-head"><span class="module-num">10</span><div><p class="module-kicker">Partager</p><h2>Context API et useContext</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Reconnaître le « prop drilling » et ce qu'il coûte.</li>
+  <li>Créer, fournir et lire un contexte, en trois étapes.</li>
+  <li>Comprendre quel fournisseur un composant écoute.</li>
+  <li>Écrire le motif qu'on trouve dans tous les projets : un Provider et un hook.</li>
+  <li>Savoir quand un contexte est une mauvaise idée.</li>
+</ul></div>
+
+<h3>Le problème : faire traverser des props</h3>
+<p>Dans TaskFlow, l'utilisateur peut choisir un thème clair ou sombre. L'état <code>theme</code> vit dans <code>App</code>. Deux composants en ont besoin : <code>Header</code>, juste en dessous, et <code>ThemeButton</code>, enfoui trois niveaux plus bas, dans la barre latérale.</p>
+<p>Avec des props, il faut passer <code>theme</code> à chaque étage, y compris à <code>Layout</code> et <code>Sidebar</code>, qui ne s'en servent pas. On appelle cela le <strong>prop drilling</strong> : percer chaque niveau pour faire descendre une donnée. Compare les deux versions :</p>
+
+<div class="demo" id="demo-drill">
+  <div class="demo-head"><span>Démo · props ou contexte</span></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Façon de transmettre le thème">
+      <button type="button" role="radio" aria-checked="true" data-mode="props">Avec des props</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="context">Avec un contexte</button>
+    </div>
+    <figure class="code compact"><figcaption>App.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <ul class="rtree" aria-label="Arbre de composants">
+      <li><span class="rnode" data-node="app">App <em data-note="app"></em></span>
+        <ul>
+          <li><span class="rnode" data-node="header">Header <em data-note="header"></em></span></li>
+          <li><span class="rnode" data-node="layout">Layout <em data-note="layout"></em></span>
+            <ul>
+              <li><span class="rnode" data-node="sidebar">Sidebar <em data-note="sidebar"></em></span>
+                <ul><li><span class="rnode" data-node="button">ThemeButton <em data-note="button"></em></span></li></ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+    <div class="demo-actions"><button type="button" class="btn" data-act="toggle">App : changer de thème</button></div>
+    <p class="demo-status" data-out="stats"></p>
+  </div>
+</div>
+<p>Avec des props, <code>Layout</code> et <code>Sidebar</code> sont des intermédiaires : ils reçoivent une donnée qui ne les concerne pas, juste pour la passer plus bas. Sur cinq niveaux et trois données partagées (thème, langue, utilisateur), chaque composant intermédiaire finit avec une liste de props qu'il ne lit jamais. Le jour où <code>ThemeButton</code> déménage, il faut tout recâbler.</p>
+<aside class="note key"><p class="label">À retenir</p>
+<p>Dans les deux versions, quand <code>App</code> change d'état, tout son sous-arbre se re-rend (module 07). Le contexte ne réduit pas le nombre de rendus. Ce qu'il supprime, c'est la plomberie : les composants intermédiaires n'ont plus à connaître ni à transmettre la donnée.</p>
+</aside>
+
+<h3>La solution, en trois étapes</h3>
+<figure class="code"><figcaption>ThemeContext.jsx</figcaption><pre><code class="language-jsx">import { createContext, useContext, useState } from "react";
+
+// Étape 1 · Créer le contexte (souvent dans son propre fichier)
+export const ThemeContext = createContext("light"); // "light" : valeur par défaut, sans fournisseur
+
+// Étape 2 · Fournir une valeur à tout un sous-arbre
+function App() {
+  const [theme, setTheme] = useState("light");
+  return (
+    <ThemeContext value={theme}>  {/* React 19. Avant : <ThemeContext.Provider value={theme}> */}
+      <Header />
+      <Layout />                  {/* plus besoin de passer theme */}
+    </ThemeContext>
+  );
+}
+
+// Étape 3 · Lire la valeur n'importe où en dessous
+function ThemeButton() {
+  const theme = useContext(ThemeContext);  // remonte jusqu'au fournisseur le plus proche
+  return <button className={`btn-${theme}`}>Thème : {theme}</button>;
+}</code></pre></figure>
+<ol class="chain" aria-label="Les trois étapes d'un contexte">
+  <li><b>createContext</b><span>déclare un « canal » et sa valeur par défaut</span></li>
+  <li><b>&lt;ThemeContext value&gt;</b><span>un fournisseur émet une valeur pour tout ce qu'il enveloppe</span></li>
+  <li><b>useContext</b><span>un composant en dessous capte cette valeur</span></li>
+</ol>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Les props sont des câbles : il faut les tirer de pièce en pièce, même dans les pièces où personne ne branche rien. Un contexte, c'est le Wi-Fi : le fournisseur émet, et tout composant « à portée », c'est-à-dire en dessous dans l'arbre, se connecte sans câble. Les pièces traversées n'ont rien à faire.</p>
+</aside>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>C'est de l'injection de dépendances avec une portée : une valeur enregistrée pour un sous-arbre, que n'importe quel composant de ce sous-arbre peut demander. Proche aussi des <code>contextvars</code> en Python : une valeur ambiante, accessible sans la passer en paramètre à chaque appel.</p>
+</aside>
+
+<h3>Quel fournisseur un composant écoute-t-il ?</h3>
+<p><code>useContext</code> remonte l'arbre depuis le composant qui l'appelle et s'arrête au <strong>premier fournisseur</strong> de ce contexte qu'il rencontre. On peut donc imbriquer des fournisseurs pour qu'une zone de l'écran ait une valeur différente :</p>
+<ul class="rtree ctx-tree" aria-label="Fournisseurs imbriqués">
+  <li><span class="rnode provider">App · &lt;ThemeContext value="light"&gt;</span>
+    <ul>
+      <li><span class="rnode consumer">Header · useContext → "light"</span></li>
+      <li><span class="rnode provider">Sidebar · &lt;ThemeContext value="dark"&gt;</span>
+        <ul><li><span class="rnode consumer">ThemeButton · useContext → "dark"</span></li></ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+<p><code>ThemeButton</code> reçoit <code>"dark"</code> : le fournisseur de <code>Sidebar</code> est plus proche que celui d'<code>App</code>. <code>Header</code> n'est pas sous <code>Sidebar</code>, il reçoit <code>"light"</code>. Et un composant sans aucun fournisseur au-dessus de lui reçoit la valeur par défaut de <code>createContext</code>.</p>
+
+<h3>Le motif de production : un Provider et un hook</h3>
+<p>Dans un vrai projet, tu ne trouveras presque jamais <code>useContext</code> utilisé directement dans les composants. Chaque contexte vit dans son fichier, qui exporte deux choses : un composant <strong>Provider</strong> qui possède l'état, et un <strong>hook</strong> <code>useXxx</code> pour le lire. Voici celui de l'utilisateur connecté, étape par étape :</p>
+<figure class="code"><figcaption>src/context/AuthContext.jsx</figcaption><pre><code class="language-jsx">import { createContext, useCallback, useContext, useMemo, useState } from "react";
+
+// 1. Le contexte, avec null comme valeur par défaut (« pas de fournisseur »)
+const AuthContext = createContext(null);
+
+// 2. Le Provider : il possède l'état et les actions
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+
+  const login = useCallback(async (email, password) => {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) throw new Error("Identifiants invalides");
+    setUser(await res.json());
+  }, []);
+
+  const logout = useCallback(() => setUser(null), []);
+
+  // 3. Un seul objet, recréé seulement si user change (voir « Ce que coûte un contexte »)
+  const value = useMemo(() => ({ user, login, logout }), [user, login, logout]);
+
+  return <AuthContext value={value}>{children}</AuthContext>;
+}
+
+// 4. Le hook : une seule porte d'entrée, avec un garde-fou
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (ctx === null) {
+    throw new Error("useAuth doit être utilisé à l'intérieur de <AuthProvider>");
+  }
+  return ctx;
+}</code></pre></figure>
+<figure class="code"><figcaption>main.jsx et UserMenu.jsx</figcaption><pre><code class="language-jsx">// main.jsx : on enveloppe l'application une fois
+<AuthProvider>
+  <App />
+</AuthProvider>
+
+// N'importe où dans l'application
+function UserMenu() {
+  const { user, logout } = useAuth();
+  if (!user) return <a href="/login">Se connecter</a>;
+  return <button onClick={logout}>Déconnexion ({user.name})</button>;
+}</code></pre></figure>
+<p>Pourquoi ce garde-fou ? Sans lui, un composant placé hors du Provider recevrait silencieusement <code>null</code>, et planterait plus loin avec un message obscur (<em>Cannot read properties of null</em>). Avec lui, l'erreur dit exactement ce qui manque. Avec le React Compiler activé, tu peux écrire ce fichier sans <code>useCallback</code> ni <code>useMemo</code> : il les ajoute pour toi.</p>
+
+<h3>Ce que coûte un contexte</h3>
+<p>Quand la valeur d'un fournisseur change, <strong>tous</strong> les composants qui lisent ce contexte se re-rendent, où qu'ils soient. Et « change » se vérifie par adresse, comme toujours.</p>
+<p>Si le Provider écrivait <code>value={{ user, login, logout }}</code>, un nouvel objet serait créé à chaque rendu du Provider, et tous les consommateurs se re-rendraient, même quand <code>user</code> n'a pas changé. Le <code>useMemo</code> garde le même objet tant que <code>user</code> ne bouge pas.</p>
+<p>Ce coût guide le bon usage du contexte :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Bon usage</th><th>Mauvais usage</th></tr></thead>
+<tbody>
+<tr><td>Thème, langue, utilisateur connecté, droits : global et peu changeant.</td><td>Éviter de passer une prop sur un ou deux niveaux : passe-la, tout simplement.</td></tr>
+<tr><td>Données dont beaucoup de composants éloignés ont besoin.</td><td>Mettre en cache les données du serveur : c'est le rôle de React Query.</td></tr>
+<tr><td>Une famille de composants qui coopèrent (des onglets et leurs panneaux).</td><td>Une valeur qui change à chaque frappe ou à chaque image d'une animation.</td></tr>
+</tbody></table></div>
+
+<h3>Avant de créer un contexte : la composition</h3>
+<p>Souvent, le prop drilling vient d'une structure où un composant intermédiaire construit lui-même ses enfants. Si le parent construit le JSX et le passe tout prêt (en <code>children</code> ou dans une prop), l'intermédiaire n'a plus besoin de connaître la donnée :</p>
+<div class="compare">
+<figure class="code"><figcaption>Layout transporte user <span class="tag bad">prop drilling</span></figcaption><pre><code class="language-jsx">function App() {
+  return <Layout user={user} />;
+}
+
+function Layout({ user }) {
+  return (
+    <div className="layout">
+      <Sidebar><UserMenu user={user} /></Sidebar>
+      <Dashboard user={user} />
+    </div>
+  );
+}</code></pre></figure>
+<figure class="code"><figcaption>App construit le contenu <span class="tag good">composition</span></figcaption><pre><code class="language-jsx">function App() {
+  return (
+    <Layout sidebar={<UserMenu user={user} />}>
+      <Dashboard user={user} />
+    </Layout>
+  );
+}
+
+function Layout({ sidebar, children }) {
+  return (
+    <div className="layout">
+      <Sidebar>{sidebar}</Sidebar>
+      {children}
+    </div>
+  );
+}</code></pre></figure>
+</div>
+
+<aside class="note trap"><p class="label">Piège</p>
+<ul>
+<li><strong>Provider oublié</strong> : <code>useContext</code> renvoie silencieusement la valeur par défaut. D'où le garde-fou dans <code>useAuth</code>.</li>
+<li><strong>Provider placé trop bas</strong> : <code>useContext</code> ne regarde qu'au-dessus de lui. Un composant au-dessus ou à côté du Provider ne voit pas sa valeur.</li>
+<li><strong>Un contexte qui contient tout</strong> : utilisateur, thème, panier et notifications dans un seul objet. Chaque changement re-rend tous les consommateurs. Fais un contexte par sujet.</li>
+</ul>
+</aside>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Le prop drilling oblige des composants intermédiaires à transporter des données qui ne les concernent pas.</li>
+<li>Un contexte se crée avec <code>createContext</code>, se fournit avec <code>&lt;MonContexte value&gt;</code>, se lit avec <code>useContext</code>. Le fournisseur le plus proche gagne.</li>
+<li>En pratique : un fichier par contexte, qui exporte un Provider et un hook <code>useXxx</code> avec garde-fou.</li>
+<li>Tous les consommateurs se re-rendent quand la valeur change : réserve le contexte aux données globales et peu changeantes.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice</p>
+<p>Crée un contexte de langue (<code>"fr"</code> ou <code>"en"</code>) avec un <code>LanguageProvider</code> et un hook <code>useLanguage</code> qui renvoie la langue et une fonction pour basculer. Un bouton bascule la langue ; un composant <code>Greeting</code> affiche « Bonjour » ou « Hello ».</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>LanguageContext.jsx</figcaption><pre><code class="language-jsx">import { createContext, useContext, useMemo, useState } from "react";
+
+const LanguageContext = createContext(null);
+
+export function LanguageProvider({ children }) {
+  const [lang, setLang] = useState("fr");
+  const value = useMemo(
+    () => ({ lang, toggle: () => setLang(l => (l === "fr" ? "en" : "fr")) }),
+    [lang]
+  );
+  return <LanguageContext value={value}>{children}</LanguageContext>;
+}
+
+export function useLanguage() {
+  const ctx = useContext(LanguageContext);
+  if (!ctx) throw new Error("useLanguage doit être dans <LanguageProvider>");
+  return ctx;
+}
+
+function LanguageSwitch() {
+  const { lang, toggle } = useLanguage();
+  return <button onClick={toggle}>{lang === "fr" ? "Switch to English" : "Passer en français"}</button>;
+}
+
+function Greeting() {
+  const { lang } = useLanguage();
+  return <h1>{lang === "fr" ? "Bonjour" : "Hello"}</h1>;
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <LanguageSwitch />
+      <Greeting />
+    </LanguageProvider>
+  );
+}</code></pre></figure>
+</details>
+</div>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Un composant appelle <code>useContext(ThemeContext)</code>, mais aucun fournisseur n'existe au-dessus de lui. Que reçoit-il ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">La valeur par défaut passée à <code>createContext(...)</code>.</button>
+    <button type="button" data-k="b">Une erreur.</button>
+    <button type="button" data-k="c">La valeur du fournisseur le plus proche, même s'il est ailleurs dans l'arbre.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Sans fournisseur au-dessus, React renvoie la valeur par défaut, sans prévenir. C'est pour ça qu'on crée souvent le contexte avec <code>null</code> et qu'on lève une erreur explicite dans le hook.</p>
+</div>
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Deux fournisseurs du même contexte sont imbriqués : <code>"light"</code> autour de l'application, <code>"dark"</code> autour de la barre latérale. Que lit un bouton placé dans la barre latérale ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a"><code>"light"</code>, le fournisseur le plus haut.</button>
+    <button type="button" data-k="b"><code>"dark"</code>, le fournisseur le plus proche.</button>
+    <button type="button" data-k="c">Les deux, dans un tableau.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong><code>useContext</code> remonte l'arbre et s'arrête au premier fournisseur rencontré, donc le plus proche.</p>
+</div>
+</section><!--/m10-->

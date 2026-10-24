@@ -1,0 +1,299 @@
+
+<!-- ===================================================== 11 -->
+<section class="module" id="m11" data-short="Custom hooks">
+<header class="module-head"><span class="module-num">11</span><div><p class="module-kicker">Réutiliser</p><h2>Custom hooks : extraire et réutiliser de la logique</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Repérer une logique dupliquée et l'extraire dans une fonction <code>useXxx</code>.</li>
+  <li>Comprendre qu'un custom hook partage de la logique, pas de l'état.</li>
+  <li>Lire et écrire les custom hooks qu'on retrouve dans tous les projets.</li>
+  <li>Lire un custom hook inconnu comme une boîte noire : ses entrées, ses sorties.</li>
+</ul></div>
+
+<h3>Le point de départ : du code dupliqué</h3>
+<p>Dans TaskFlow, la barre d'état affiche « En ligne » ou « Hors ligne », et le bouton « Enregistrer » se désactive quand la connexion est perdue. Les deux composants ont besoin de la même information. Première version, écrite deux fois :</p>
+<div class="compare">
+<figure class="code"><figcaption>StatusBar.jsx</figcaption><pre><code class="language-jsx">function StatusBar() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
+  return <p>{isOnline ? "En ligne" : "Hors ligne"}</p>;
+}</code></pre></figure>
+<figure class="code"><figcaption>SaveButton.jsx</figcaption><pre><code class="language-jsx">function SaveButton() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
+  return <button disabled={!isOnline}>Enregistrer</button>;
+}</code></pre></figure>
+</div>
+<p>Douze lignes identiques. Avec une fonction ordinaire, on ne pourrait pas les extraire : elles appellent des hooks, et les hooks ne s'appellent que dans un composant… ou dans un custom hook.</p>
+
+<h3>Extraire la logique dans un custom hook</h3>
+<figure class="code"><figcaption>hooks/useOnlineStatus.js</figcaption><pre><code class="language-jsx">export function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
+  return isOnline;   // la seule chose dont les composants ont besoin
+}
+
+// Les composants deviennent triviaux
+function StatusBar() {
+  const isOnline = useOnlineStatus();
+  return <p>{isOnline ? "En ligne" : "Hors ligne"}</p>;
+}
+
+function SaveButton() {
+  const isOnline = useOnlineStatus();
+  return <button disabled={!isOnline}>Enregistrer</button>;
+}</code></pre></figure>
+<p>Un custom hook, c'est simplement une fonction dont le nom commence par <code>use</code> et qui appelle d'autres hooks. Rien de magique : React ne le traite pas différemment. Le préfixe <code>use</code> sert au linter, qui sait alors appliquer les règles des hooks à cette fonction.</p>
+<ol class="chain" aria-label="Anatomie d'un custom hook">
+  <li><b>Entrées</b><span>des paramètres ordinaires : <code>useDebouncedValue(query, 300)</code></span></li>
+  <li><b>Le hook</b><span>des <code>useState</code>, des <code>useEffect</code>, d'autres hooks</span></li>
+  <li><b>Sorties</b><span>une valeur, un tableau <code>[valeur, setter]</code> ou un objet</span></li>
+</ol>
+
+<h3>Ce qu'un custom hook partage : la logique, pas l'état</h3>
+<p>Point essentiel, et source fréquente de confusion. Quand <code>StatusBar</code> et <code>SaveButton</code> appellent tous les deux <code>useOnlineStatus()</code>, chacun obtient <strong>son propre</strong> <code>useState</code>. Ils affichent la même chose parce qu'ils écoutent la même source (le navigateur), pas parce qu'ils partagent une variable.</p>
+<p>La démo le rend visible avec un hook <code>useToggle</code> utilisé par deux panneaux, comparé à un état placé dans un contexte :</p>
+
+<div class="demo" id="demo-share">
+  <div class="demo-head"><span>Démo · logique partagée ou état partagé ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Façon de partager">
+      <button type="button" role="radio" aria-checked="true" data-mode="hook">Deux appels de useToggle</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="context">Un état dans un contexte</button>
+    </div>
+    <figure class="code compact"><figcaption>Panels.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-split">
+      <div class="demo-col"><p class="demo-title">Panneau A</p><p class="share-val" data-out="a">Notifications : désactivées</p><button type="button" class="btn ghost" data-toggle="a">Basculer</button></div>
+      <div class="demo-col"><p class="demo-title">Panneau B</p><p class="share-val" data-out="b">Notifications : désactivées</p><button type="button" class="btn ghost" data-toggle="b">Basculer</button></div>
+    </div>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite"></p>
+  </div>
+</div>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Un custom hook est une <strong>recette</strong>, pas un plat. Deux cuisiniers qui suivent la même recette ont chacun leur plat : si l'un sale le sien, l'autre n'en sait rien. Pour que deux composants partagent vraiment une valeur, il faut un seul plat posé au milieu de la table : un état remonté chez un parent, ou un contexte.</p>
+</aside>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>En termes d'injection de dépendances, un custom hook a une durée de vie <em>transient</em> : chaque composant qui l'appelle obtient sa propre instance. Un contexte ressemble à un service <em>scoped</em> partagé par tout un sous-arbre.</p>
+</aside>
+
+<h3>Les custom hooks qu'on retrouve partout</h3>
+<h4>useToggle : un booléen et sa bascule</h4>
+<figure class="code"><figcaption>hooks/useToggle.js</figcaption><pre><code class="language-jsx">export function useToggle(initial = false) {
+  const [value, setValue] = useState(initial);
+  const toggle = () => setValue(v => !v);
+  return [value, toggle];   // un tableau : l'appelant choisit les noms
+}
+
+// const [isOpen, toggleOpen] = useToggle();
+// const [isDark, toggleDark] = useToggle(true);</code></pre></figure>
+
+<h4>useLocalStorage : un état qui survit au rechargement</h4>
+<figure class="code"><figcaption>hooks/useLocalStorage.js</figcaption><pre><code class="language-jsx">export function useLocalStorage(key, initialValue) {
+  // 1. Au premier rendu, on lit la valeur enregistrée (une seule fois, grâce à la fonction)
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored !== null ? JSON.parse(stored) : initialValue;
+    } catch {
+      return initialValue;          // stockage bloqué ou contenu illisible
+    }
+  });
+
+  // 2. À chaque changement, on enregistre
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // stockage plein ou bloqué : on ignore
+    }
+  }, [key, value]);
+
+  return [value, setValue];         // la même forme que useState : facile à substituer
+}
+
+// const [theme, setTheme] = useLocalStorage("theme", "light");</code></pre></figure>
+
+<h4>useDebouncedValue : attendre que l'utilisateur ait fini de taper</h4>
+<p>Une barre de recherche qui interroge l'API à chaque frappe envoie une requête pour « r », puis « re », puis « rea »… Le <em>debounce</em> attend que la frappe se calme avant de transmettre la valeur. Tape « react hooks » dans la démo et compare les deux compteurs :</p>
+
+<div class="demo" id="demo-debounce">
+  <div class="demo-head"><span>Démo · useDebouncedValue</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <label class="sr-only" for="deb-input">Recherche</label>
+    <input id="deb-input" class="text-in" type="text" placeholder="Tape « react hooks »" autocomplete="off" spellcheck="false">
+    <p class="demo-status"><code>query</code> = <strong data-out="q">""</strong> · <code>debouncedQuery</code> = <strong data-out="dq">""</strong></p>
+    <div class="demo-split">
+      <div class="demo-col"><p class="demo-title">Requêtes sans debounce</p><p class="big-num" data-out="n1">0</p><p class="demo-hint">une par frappe</p></div>
+      <div class="demo-col"><p class="demo-title">Requêtes avec useDebouncedValue (500 ms)</p><p class="big-num" data-out="n2">0</p><p class="demo-hint">une par pause dans la frappe</p></div>
+    </div>
+  </div>
+  <div class="log" data-out="log"><p class="l-empty">Les requêtes réellement envoyées s'afficheront ici.</p></div>
+</div>
+<figure class="code"><figcaption>hooks/useDebouncedValue.js</figcaption><pre><code class="language-jsx">export function useDebouncedValue(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay); // dans delay ms, adopter la valeur
+    return () => clearTimeout(id);   // une nouvelle frappe arrive avant ? on annule le minuteur
+  }, [value, delay]);
+
+  return debounced;
+}
+
+// Dans le composant de recherche
+const [query, setQuery] = useState("");
+const debouncedQuery = useDebouncedValue(query, 500);
+// … on interroge l'API avec debouncedQuery, pas avec query</code></pre></figure>
+<p>Regarde comme le nettoyage fait tout le travail : chaque frappe change <code>value</code>, donc React nettoie l'effet précédent (le minuteur est annulé) et en lance un nouveau. Seul le dernier minuteur, celui qui n'est pas interrompu, arrive au bout.</p>
+
+<h4>useFetch : charger des données (version pédagogique)</h4>
+<figure class="code"><figcaption>hooks/useFetch.js</figcaption><pre><code class="language-jsx">export function useFetch(url) {
+  const [result, setResult] = useState({ url: null, data: null, error: null });
+
+  useEffect(() => {
+    let ignore = false;                         // le drapeau du module 08
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => { if (!ignore) setResult({ url, data, error: null }); })
+      .catch(error => { if (!ignore) setResult({ url, data: null, error }); });
+    return () => { ignore = true; };
+  }, [url]);
+
+  return { data: result.data, error: result.error, isLoading: result.url !== url };
+}
+
+// const { data: tasks, isLoading, error } = useFetch("/api/tasks");</code></pre></figure>
+<p>Retiens la forme de ce que renvoie <code>useFetch</code> : <code>{ data, isLoading, error }</code>. Le <code>useQuery</code> de React Query renvoie à peu près la même chose, en ajoutant le cache, la déduplication des requêtes, les nouvelles tentatives et l'invalidation. Tu reconnaîtras la forme.</p>
+
+<h3>Bien concevoir un custom hook</h3>
+<ul>
+<li><strong>Nomme-le par son intention</strong> : <code>useOnlineStatus</code>, <code>useCurrentUser</code>. Évite les noms de cycle de vie comme <code>useMount</code>, qui disent quand, pas quoi.</li>
+<li><strong>Renvoie un tableau</strong> pour deux valeurs (comme <code>useState</code>), un <strong>objet</strong> au-delà, pour que l'appelant ne lise que ce qui l'intéresse.</li>
+<li><strong>Une fonction qui n'appelle aucun hook n'est pas un hook</strong> : nomme-la normalement (<code>formatDate</code>, pas <code>useFormatDate</code>) et range-la dans <code>lib/</code>.</li>
+<li><strong>Garde-le centré sur une seule chose.</strong> Un <code>useEverything</code> qui charge, filtre, trie et pagine se découpe en plusieurs hooks.</li>
+</ul>
+
+<h3>Lire un custom hook inconnu</h3>
+<p>Dans un projet existant, tu vas croiser des dizaines de hooks que tu n'as pas écrits. Inutile de tous les ouvrir. Traite chacun comme une boîte noire et pose trois questions :</p>
+<ol>
+<li><strong>Qu'est-ce qui entre ?</strong> Les paramètres : <code>useTasks({ projectId, filter })</code>.</li>
+<li><strong>Qu'est-ce qui sort ?</strong> Ce que le composant déstructure : <code>{ tasks, isLoading, toggleTask }</code>.</li>
+<li><strong>Y a-t-il un effet vers l'extérieur ?</strong> Un appel réseau, un abonnement, un stockage ? (Un coup d'œil aux <code>useEffect</code> et aux imports de <code>api/</code> suffit.)</li>
+</ol>
+<p>N'ouvre le code en détail que si le bug semble venir de là, c'est-à-dire si les sorties du hook sont fausses alors que ses entrées sont justes.</p>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Un custom hook est une fonction <code>useXxx</code> qui appelle d'autres hooks. Il sert à extraire une logique avec état répétée dans plusieurs composants.</li>
+<li>Chaque appel a son propre état : un hook partage une recette, pas un plat. Pour partager une valeur, remonte l'état ou utilise un contexte.</li>
+<li>Les classiques : <code>useToggle</code>, <code>useLocalStorage</code>, <code>useDebouncedValue</code>, <code>useFetch</code>.</li>
+<li>Pour lire un hook inconnu : ses entrées, ses sorties, ses effets.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice 1 · ton premier custom hook</p>
+<p>Écris <code>useCounter(initial = 0, step = 1)</code> qui renvoie <code>{ count, increment, decrement, reset }</code>. Utilise-le dans deux compteurs indépendants.</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>hooks/useCounter.js</figcaption><pre><code class="language-jsx">export function useCounter(initial = 0, step = 1) {
+  const [count, setCount] = useState(initial);
+  return {
+    count,
+    increment: () => setCount(c => c + step),
+    decrement: () => setCount(c => c - step),
+    reset: () => setCount(initial),
+  };
+}
+
+function Counter({ label, step }) {
+  const { count, increment, decrement, reset } = useCounter(0, step);
+  return (
+    <p>
+      {label} : {count}
+      <button onClick={decrement}>−</button>
+      <button onClick={increment}>+</button>
+      <button onClick={reset}>Remettre à zéro</button>
+    </p>
+  );
+}
+
+// Deux instances, deux états indépendants
+<Counter label="Par 1" step={1} />
+<Counter label="Par 10" step={10} /></code></pre></figure>
+</details>
+</div>
+<div class="exercise"><p class="label">Exercice 2 · extraire useWindowWidth</p>
+<p>Reprends le composant <code>WindowWidth</code> du module 08 et extrais sa logique dans un hook <code>useWindowWidth()</code> qui renvoie la largeur. Utilise-le dans un composant qui affiche « Mobile » sous 600 px et « Bureau » au-dessus.</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>hooks/useWindowWidth.js</figcaption><pre><code class="language-jsx">export function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return width;
+}
+
+function DeviceLabel() {
+  const width = useWindowWidth();
+  return <p>{width < 600 ? "Mobile" : "Bureau"}</p>;   // une valeur dérivée, pas un état
+}</code></pre></figure>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Deux composants appellent <code>useToggle()</code>. On bascule le premier. Que devient le second ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Il bascule aussi : ils partagent le même état.</button>
+    <button type="button" data-k="b">Rien : chaque appel a son propre état.</button>
+    <button type="button" data-k="c">Ça dépend de l'ordre des composants.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Chaque appel d'un custom hook crée son propre <code>useState</code>. Pour un état partagé, remonte-le chez un parent commun ou place-le dans un contexte.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Une fonction <code>useFormatPrice(amount)</code> renvoie <code>amount.toFixed(2) + " €"</code> et n'appelle aucun hook. Que penses-tu de son nom ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Parfait : c'est utilisé dans des composants.</button>
+    <button type="button" data-k="b">Il faudrait l'appeler <code>usePrice</code>.</button>
+    <button type="button" data-k="c">Trompeur : sans hook à l'intérieur, c'est une fonction ordinaire, à nommer <code>formatPrice</code>.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Le préfixe <code>use</code> annonce « j'appelle des hooks, respecte leurs règles ». Une fonction pure n'a pas ces contraintes : elle peut s'appeler dans une condition, une boucle ou hors de React.</p>
+</div>
+</section><!--/m11-->

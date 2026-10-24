@@ -1,0 +1,316 @@
+
+<!-- ===================================================== 09 -->
+<section class="module" id="m09" data-short="Règles et autres hooks">
+<header class="module-head"><span class="module-num">09</span><div><p class="module-kicker">Hooks · la boîte à outils</p><h2>Les règles des hooks et les autres hooks que tu croiseras</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Connaître les deux règles des hooks et voir concrètement pourquoi elles existent.</li>
+  <li>Choisir entre une variable, une ref et un état.</li>
+  <li>Comprendre ce que font <code>memo</code>, <code>useMemo</code> et <code>useCallback</code>, et quand ils servent vraiment.</li>
+  <li>Lire et écrire un <code>useReducer</code>.</li>
+</ul></div>
+
+<h3>Les deux règles des hooks</h3>
+<ol>
+<li>On appelle les hooks <strong>au premier niveau</strong> du composant : jamais dans un <code>if</code>, une boucle, une fonction imbriquée, ni après un <code>return</code> anticipé.</li>
+<li>On les appelle <strong>uniquement</strong> depuis un composant React ou depuis un custom hook (module 11).</li>
+</ol>
+<p>Ces règles paraissent arbitraires tant qu'on ne sait pas comment React retrouve tes états d'un rendu à l'autre. Regardons-le.</p>
+
+<h3>Pourquoi : React range les hooks par ordre d'appel</h3>
+<p>Quand tu écris <code>const [age, setAge] = useState(36)</code>, React ne voit pas le nom <code>age</code>. Il voit seulement « le 2<sup>e</sup> hook appelé par ce composant ». Il range les valeurs dans des cases numérotées, dans l'ordre d'appel, et au rendu suivant il les redonne dans le même ordre.</p>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Un vestiaire où l'on rend les manteaux dans l'ordre des tickets, sans regarder les visages. Tant que tout le monde passe dans le même ordre, chacun récupère son manteau. Si quelqu'un passe son tour, toutes les personnes suivantes repartent avec le manteau de leur voisin.</p>
+</aside>
+<p>Dans la démo, le composant <code>Profile</code> est d'abord rendu avec <code>isAdmin = false</code>. Passe au rendu suivant, où <code>isAdmin</code> vaut <code>true</code>, et regarde ce que reçoit chaque hook :</p>
+
+<div class="demo" id="demo-slots">
+  <div class="demo-head"><span>Démo · les cases des hooks</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Version du composant">
+      <button type="button" role="radio" aria-checked="true" data-mode="cond">Hook dans un if</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="always">Hooks toujours appelés</button>
+    </div>
+    <figure class="code compact"><figcaption>Profile.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-actions"><button type="button" class="btn" data-act="next">Rendu suivant, avec isAdmin = true</button></div>
+    <div class="table-wrap"><table class="slots">
+      <thead><tr><th>Case</th><th>Rangé au rendu n°1</th><th>Demandé au rendu n°2</th><th>Reçu</th></tr></thead>
+      <tbody data-out="rows"></tbody>
+    </table></div>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite"></p>
+  </div>
+</div>
+<p>Avec le hook dans un <code>if</code>, <code>perms</code> récupère l'âge et <code>age</code> ne trouve rien : React lève l'erreur <em>Rendered more hooks than during the previous render</em>. La solution : appeler tous les hooks à chaque rendu, et mettre la condition dans l'<strong>affichage</strong>, pas autour du hook.</p>
+<p>Une seule exception : <code>use</code> (module 12) peut s'appeler dans une condition. Le plugin ESLint <code>react-hooks</code>, installé dans les projets Vite, vérifie ces règles à ta place.</p>
+
+<h3>useRef : une boîte que React ne surveille pas</h3>
+<p>On a déjà deux façons de garder une valeur dans un composant : une variable ordinaire (<code>let</code>) et un état (<code>useState</code>). Il en existe une troisième, la <strong>ref</strong>. Les trois se comportent différemment :</p>
+
+<div class="demo" id="demo-ref">
+  <div class="demo-head"><span>Démo · variable, ref ou état ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <figure class="code compact"><figcaption>Counters.jsx · un seul composant, trois compteurs</figcaption><pre><code class="language-jsx">function Counters() {
+  let a = 0;                        // variable ordinaire
+  const b = useRef(0);              // ref : { current: 0 }
+  const [c, setC] = useState(0);    // état
+
+  return (
+    <>
+      <button onClick={() => { a = a + 1; }}>let : {a}</button>
+      <button onClick={() => { b.current = b.current + 1; }}>ref : {b.current}</button>
+      <button onClick={() => setC(c + 1)}>état : {c}</button>
+    </>
+  );
+  // (lire une ref pendant le rendu est déconseillé : c'est pour la démonstration)
+}</code></pre></figure>
+    <div class="demo-three">
+      <div class="demo-col"><p class="demo-title"><code>let a</code></p><button type="button" class="btn" data-inc="a">let : <span data-out="a-screen">0</span></button><p class="demo-hint">Valeur réelle : <strong data-out="a-real">0</strong></p></div>
+      <div class="demo-col"><p class="demo-title"><code>useRef</code></p><button type="button" class="btn" data-inc="b">ref : <span data-out="b-screen">0</span></button><p class="demo-hint">Valeur réelle : <strong data-out="b-real">0</strong></p></div>
+      <div class="demo-col"><p class="demo-title"><code>useState</code></p><button type="button" class="btn" data-inc="c">état : <span data-out="c-screen">0</span></button><p class="demo-hint">Valeur réelle : <strong data-out="c-real">0</strong></p></div>
+    </div>
+    <p class="demo-hint">Clique plusieurs fois sur « let » et « ref », puis une fois sur « état » : ce clic provoque un rendu.</p>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th><code>let</code></th><th><code>useRef</code></th><th><code>useState</code></th></tr></thead>
+<tbody>
+<tr><td>Survit d'un rendu à l'autre</td><td>non, repart de sa valeur initiale</td><td>oui</td><td>oui</td></tr>
+<tr><td>La changer déclenche un rendu</td><td>non</td><td>non</td><td>oui</td></tr>
+<tr><td>Pour stocker</td><td>un calcul intermédiaire du rendu</td><td>un élément du DOM, un identifiant de minuteur, une valeur technique</td><td>tout ce qui s'affiche</td></tr>
+</tbody></table></div>
+<p>Une ref est un simple objet <code>{ current: … }</code> que React te garde d'un rendu à l'autre, sans jamais réagir quand tu le modifies. Ses deux usages courants :</p>
+<figure class="code"><figcaption>SearchBox.jsx et Stopwatch.jsx</figcaption><pre><code class="language-jsx">import { useRef } from "react";
+
+// 1. Accéder à un élément du DOM
+function SearchBox() {
+  const inputRef = useRef(null);         // { current: null }
+
+  return (
+    <>
+      <input ref={inputRef} />           {/* React place l'élément <input> dans inputRef.current */}
+      <button onClick={() => inputRef.current.focus()}>Rechercher</button>
+    </>
+  );
+}
+
+// 2. Garder une valeur technique, qui ne s'affiche pas
+function Stopwatch() {
+  const intervalRef = useRef(null);
+
+  function start() {
+    intervalRef.current = setInterval(tick, 1000);
+  }
+  function stop() {
+    clearInterval(intervalRef.current);  // on retrouve l'identifiant au clic suivant
+  }
+  // ...
+}</code></pre></figure>
+<p>Vois une ref comme un champ privé d'une classe, qui ne prévient personne quand il change. Nouveauté de React 19 : un composant reçoit <code>ref</code> comme une prop ordinaire. Dans du code plus ancien, tu verras <code>forwardRef(...)</code>, qui servait au même usage.</p>
+
+<h3>La mémoïsation : memo, useMemo et useCallback</h3>
+<p>Mémoïser, c'est garder en mémoire le résultat d'un calcul pour ne pas le refaire si les entrées n'ont pas changé, comme un <code>@lru_cache</code> en Python. React propose trois outils, qui répondent à un même problème.</p>
+
+<h4>Le problème</h4>
+<p>On l'a vu au module 07 : quand un parent se re-rend, tous ses enfants se re-rendent. D'habitude, c'est sans importance. Mais si un enfant est lent à rendre (une liste de 5 000 lignes, un graphique), le re-rendre pour rien devient visible.</p>
+
+<h4>memo : sauter le rendu d'un composant</h4>
+<figure class="code"><figcaption>TaskList.jsx</figcaption><pre><code class="language-jsx">import { memo } from "react";
+
+const TaskList = memo(function TaskList({ tasks, onToggle }) {
+  // ... une liste coûteuse à rendre
+});</code></pre></figure>
+<p>Avant de re-rendre un composant enveloppé dans <code>memo</code>, React compare chacune de ses props avec la précédente (avec <code>Object.is</code>). Si toutes sont identiques, il réutilise le résultat précédent.</p>
+
+<h4>Le piège : les fonctions et objets recréés à chaque rendu</h4>
+<p>Une fonction déclarée dans un composant est une <strong>nouvelle</strong> fonction à chaque rendu, donc une nouvelle adresse (module 05). Pour <code>memo</code>, la prop <code>onToggle</code> a « changé » à chaque fois, et la mémoïsation ne sert à rien. Essaie :</p>
+
+<div class="demo" id="demo-memo">
+  <div class="demo-head"><span>Démo · memo et useCallback</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Version de handleToggle">
+      <button type="button" role="radio" aria-checked="true" data-mode="unstable">Sans useCallback</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="stable">Avec useCallback</button>
+    </div>
+    <figure class="code compact"><figcaption>TaskBoard.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-actions">
+      <button type="button" class="btn" data-act="parent">TaskBoard : setClicks(clicks + 1)</button>
+      <button type="button" class="btn ghost" data-act="tasks">Cocher une tâche</button>
+    </div>
+    <p class="demo-status">Rendus de TaskBoard : <strong data-out="parent">1</strong> · rendus de TaskList (memo) : <strong data-out="child">1</strong></p>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+<p><code>useCallback</code> garde la <strong>même fonction</strong> d'un rendu à l'autre, tant que ses dépendances ne changent pas. <code>useMemo</code> fait la même chose pour le <strong>résultat d'un calcul</strong> :</p>
+<figure class="code"><figcaption>TaskBoard.jsx</figcaption><pre><code class="language-jsx">// useCallback : la même fonction tant que les dépendances ne changent pas
+const handleToggle = useCallback(id => {
+  setTasks(ts => ts.map(t => (t.id === id ? { ...t, done: !t.done } : t)));
+}, []);
+
+// useMemo : le même résultat tant que tasks ne change pas
+const sorted = useMemo(
+  () => tasks.toSorted((a, b) => a.due.localeCompare(b.due)),
+  [tasks]
+);</code></pre></figure>
+<p>Remarque dans la démo : quand on coche une tâche, <code>TaskList</code> se re-rend même avec <code>useCallback</code>. C'est normal, sa prop <code>tasks</code> a vraiment changé. <code>memo</code> évite seulement les rendus <strong>inutiles</strong>.</p>
+<aside class="note key"><p class="label">À retenir · le React Compiler</p>
+<p>Depuis octobre 2025, le <strong>React Compiler</strong> (version 1.0 stable) ajoute automatiquement cette mémoïsation au moment du build. Pour du nouveau code, l'équipe React recommande de s'appuyer sur lui et de garder <code>useMemo</code> et <code>useCallback</code> comme échappatoires ponctuelles. Dans les projets existants et dans le code généré par une IA, tu en verras partout : sache les lire, n'en ajoute pas « au cas où ».</p>
+</aside>
+
+<h3>useReducer : centraliser les mises à jour</h3>
+<p>Dans TaskFlow, les tâches sont modifiées à plusieurs endroits : ajout, case à cocher, suppression, renommage. Chaque gestionnaire contient sa propre logique de mise à jour, éparpillée dans le composant. Quand cette logique grossit, on la regroupe dans une seule fonction pure, le <strong>reducer</strong>.</p>
+<ol class="chain" aria-label="Le trajet d'une mise à jour avec useReducer">
+  <li><b>Un clic</b><span>l'utilisateur coche une tâche</span></li>
+  <li><b>dispatch(action)</b><span>le gestionnaire décrit ce qui s'est passé : <code>{ type: "toggled", id: 2 }</code></span></li>
+  <li><b>reducer(état, action)</b><span>calcule le nouvel état à partir de l'ancien</span></li>
+  <li><b>Nouvel état</b><span>React le range et refait le rendu</span></li>
+</ol>
+<p>Le gestionnaire ne dit plus <em>comment</em> modifier les données, seulement <em>ce qui s'est passé</em>. C'est le reducer qui décide. Envoie des actions et observe quelle branche s'exécute :</p>
+
+<div class="demo" id="demo-reducer">
+  <div class="demo-head"><span>Démo · le reducer en action</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="demo-actions">
+      <button type="button" class="btn" data-action="added">dispatch « added »</button>
+      <button type="button" class="btn" data-action="toggled">dispatch « toggled »</button>
+      <button type="button" class="btn" data-action="deleted">dispatch « deleted »</button>
+      <button type="button" class="btn ghost" data-action="renamed">dispatch « renamed » (inconnue)</button>
+    </div>
+    <div class="red-grid">
+      <pre class="cond-code" aria-label="Code du reducer"><span class="ln" data-line="1">function tasksReducer(tasks, action) {</span>
+<span class="ln" data-line="2">  switch (action.type) {</span>
+<span class="ln" data-line="3">    case "added":</span>
+<span class="ln" data-line="4">      return [...tasks, { id: action.id, title: action.title, done: false }];</span>
+<span class="ln" data-line="5">    case "toggled":</span>
+<span class="ln" data-line="6">      return tasks.map(t =&gt; (t.id === action.id ? { ...t, done: !t.done } : t));</span>
+<span class="ln" data-line="7">    case "deleted":</span>
+<span class="ln" data-line="8">      return tasks.filter(t =&gt; t.id !== action.id);</span>
+<span class="ln" data-line="9">    default:</span>
+<span class="ln" data-line="10">      throw new Error(`Action inconnue : ${action.type}`);</span>
+<span class="ln" data-line="11">  }</span>
+<span class="ln" data-line="12">}</span></pre>
+      <div class="red-side">
+        <div><p class="label">L'état : tasks</p><ul class="mini-list" data-out="state"></ul></div>
+        <div><p class="label">Dernière action</p><pre class="pp-code"><code data-out="action">aucune</code></pre></div>
+      </div>
+    </div>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+<figure class="code"><figcaption>TaskApp.jsx</figcaption><pre><code class="language-jsx">import { useReducer } from "react";
+
+function TaskApp() {
+  const [tasks, dispatch] = useReducer(tasksReducer, initialTasks);
+  //     ^état  ^fonction pour envoyer une action   ^le reducer  ^état initial
+
+  function handleAdd(title) {
+    dispatch({ type: "added", id: crypto.randomUUID(), title });
+  }
+  function handleToggle(id) {
+    dispatch({ type: "toggled", id });
+  }
+  function handleDelete(id) {
+    dispatch({ type: "deleted", id });
+  }
+  // ...
+}</code></pre></figure>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>Un reducer, c'est un gestionnaire de commandes pur, ou la méthode <code>apply(state, event)</code> d'un agrégat en event sourcing : (état, action) → nouvel état. Il se teste unitairement sans React : on lui donne un état et une action, on vérifie le résultat. C'est aussi le principe de Redux, que tu croiseras dans certains projets.</p>
+</aside>
+<p>Quand passer de <code>useState</code> à <code>useReducer</code> ? Quand plusieurs gestionnaires modifient le même état de façons différentes, ou quand la logique de mise à jour mérite d'être testée seule. Pour un booléen ou un champ texte, <code>useState</code> reste plus simple.</p>
+
+<h3>Les autres hooks, en une ligne</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Hook</th><th>Sert à</th></tr></thead>
+<tbody>
+<tr><td><code>useId</code></td><td>Générer un identifiant unique et stable, par exemple pour relier un <code>&lt;label htmlFor&gt;</code> à son champ.</td></tr>
+<tr><td><code>useTransition</code></td><td>Marquer une mise à jour comme non urgente : l'interface reste réactive pendant qu'elle se prépare.</td></tr>
+<tr><td><code>useDeferredValue</code></td><td>Afficher une version « en retard » d'une valeur pour garder la saisie fluide.</td></tr>
+<tr><td><code>useSyncExternalStore</code></td><td>S'abonner proprement à un store extérieur à React.</td></tr>
+<tr><td><code>useActionState</code>, <code>useOptimistic</code>, <code>useFormStatus</code></td><td>Formulaires et mises à jour optimistes en React 19.</td></tr>
+<tr><td><code>use</code></td><td>Lire une promesse ou un contexte ; peut s'appeler dans une condition (module 12).</td></tr>
+</tbody></table></div>
+
+<h3>Quel hook pour quel besoin ?</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Je veux…</th><th>J'utilise</th></tr></thead>
+<tbody>
+<tr><td>une valeur qui, en changeant, met l'écran à jour</td><td><code>useState</code> (ou <code>useReducer</code> si la logique est riche)</td></tr>
+<tr><td>une valeur calculable à partir d'autres</td><td>rien : une simple variable dans le rendu</td></tr>
+<tr><td>me synchroniser avec un système extérieur</td><td><code>useEffect</code> avec nettoyage</td></tr>
+<tr><td>accéder à un élément du DOM, ou garder une valeur sans re-rendu</td><td><code>useRef</code></td></tr>
+<tr><td>partager une valeur avec tout un sous-arbre</td><td><code>useContext</code> (module 10)</td></tr>
+<tr><td>réutiliser une logique avec état dans plusieurs composants</td><td>un custom hook (module 11)</td></tr>
+</tbody></table></div>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>React retrouve tes hooks par leur ordre d'appel : jamais de hook dans une condition, une boucle ou après un <code>return</code>.</li>
+<li><code>let</code> repart de zéro à chaque rendu, une ref survit sans déclencher de rendu, un état survit et déclenche un rendu.</li>
+<li><code>memo</code> saute un rendu si les props sont identiques ; <code>useCallback</code> et <code>useMemo</code> gardent la même fonction ou le même résultat. Le React Compiler fait ce travail pour toi.</li>
+<li><code>useReducer</code> centralise les mises à jour : les gestionnaires envoient des actions, le reducer calcule le nouvel état.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice · passer à useReducer</p>
+<p>Ce compteur a trois boutons qui modifient le même état. Réécris-le avec <code>useReducer</code> et trois actions : <code>incremented</code>, <code>decremented</code>, <code>reset</code>. Le compteur ne doit jamais descendre sous 0.</p>
+<figure class="code"><figcaption>Counter.jsx · avant</figcaption><pre><code class="language-jsx">function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <button onClick={() => setCount(c => c + 1)}>+</button>
+      <button onClick={() => setCount(c => Math.max(0, c - 1))}>−</button>
+      <button onClick={() => setCount(0)}>Remettre à zéro</button>
+      <p>{count}</p>
+    </>
+  );
+}</code></pre></figure>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>Counter.jsx · après</figcaption><pre><code class="language-jsx">function counterReducer(count, action) {
+  switch (action.type) {
+    case "incremented":
+      return count + 1;
+    case "decremented":
+      return Math.max(0, count - 1);   // la règle métier vit à un seul endroit
+    case "reset":
+      return 0;
+    default:
+      throw new Error(`Action inconnue : ${action.type}`);
+  }
+}
+
+function Counter() {
+  const [count, dispatch] = useReducer(counterReducer, 0);
+  return (
+    <>
+      <button onClick={() => dispatch({ type: "incremented" })}>+</button>
+      <button onClick={() => dispatch({ type: "decremented" })}>−</button>
+      <button onClick={() => dispatch({ type: "reset" })}>Remettre à zéro</button>
+      <p>{count}</p>
+    </>
+  );
+}
+
+// Et il se teste sans React :
+// counterReducer(0, { type: "decremented" }) === 0</code></pre></figure>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Pourquoi ne peut-on pas appeler <code>useState</code> dans un <code>if</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Parce que <code>useState</code> est asynchrone.</button>
+    <button type="button" data-k="b">Parce que React identifie chaque hook par son ordre d'appel, qui doit être le même à chaque rendu.</button>
+    <button type="button" data-k="c">Parce que le compilateur JSX ne le permet pas.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>React associe les valeurs aux hooks par position : 1<sup>er</sup> appel, 2<sup>e</sup> appel… Un hook conditionnel décale tous les suivants d'un rendu à l'autre, et chaque hook récupère la valeur d'un autre.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Tu veux mémoriser l'identifiant d'un minuteur pour pouvoir l'arrêter plus tard. Il ne s'affiche nulle part. Que choisis-tu ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Une variable <code>let</code> dans le composant.</button>
+    <button type="button" data-k="b"><code>useState</code>.</button>
+    <button type="button" data-k="c"><code>useRef</code>.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un <code>let</code> serait perdu au rendu suivant, et un état provoquerait des rendus inutiles. Une ref garde la valeur entre les rendus sans en déclencher.</p>
+</div>
+</section><!--/m09-->

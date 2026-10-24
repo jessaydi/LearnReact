@@ -1,0 +1,159 @@
+
+<!-- ===================================================== 16 -->
+<section class="module" id="m16" data-short="Travailler avec l'IA">
+<header class="module-head"><span class="module-num">16</span><div><p class="module-kicker">Méthode</p><h2>L'IA comme copilote, sans perdre le contrôle</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Donner à l'IA le contexte qui produit du bon code React.</li>
+  <li>Travailler par petits pas vérifiables plutôt que par grosses générations.</li>
+  <li>Relire le code généré avec une grille de signaux d'alerte, et t'y entraîner.</li>
+  <li>Utiliser l'IA pour apprendre, pas seulement pour produire.</li>
+</ul></div>
+
+<p>Considère l'IA comme un développeur junior très rapide et très sûr de lui, y compris quand il se trompe. Elle a appris sur des années de code React, dont une bonne partie est ancienne : composants en classe, <code>create-react-app</code>, effets partout. Toi, tu restes l'architecte et le relecteur. Tout ce cours sert à ça : comprendre ce qu'elle écrit.</p>
+
+<h3>Ce que doit contenir un bon prompt</h3>
+<ol class="steps">
+  <li><b>Le contexte technique</b><span>les versions de React et des bibliothèques : copie les lignes utiles du <code>package.json</code>.</span></li>
+  <li><b>Les fichiers concernés</b><span>le composant, et les hooks et contextes qu'il utilise.</span></li>
+  <li><b>L'objectif et les contraintes</b><span>« suis le motif existant », « pas de nouvelle dépendance », « garde l'état local ».</span></li>
+  <li><b>La forme de la réponse</b><span>un plan d'abord, puis de petites modifications expliquées.</span></li>
+</ol>
+<p>Sans contexte, l'IA devine : elle choisit une bibliothèque que tu n'utilises pas, ou une API d'une ancienne version de React. Avec le contexte, elle suit les conventions de ton projet.</p>
+<figure class="code"><figcaption>prompt · comprendre un composant</figcaption><pre><code class="language-text">Projet : React 19 + Vite, React Query 5, React Router.
+Voici le composant TaskBoard.jsx et le hook useTasks.js qu'il utilise.
+
+Explique-moi ce composant comme à un dev backend qui apprend React :
+1. ses props, son état, les contextes et hooks qu'il utilise ;
+2. ce qui déclenche ses re-rendus ;
+3. le rôle de chaque useEffect et ce qui se passerait sans son nettoyage ;
+4. ce qui te semble fragile ou non idiomatique.
+Ne modifie pas le code.</code></pre></figure>
+<figure class="code"><figcaption>prompt · ajouter une fonctionnalité</figcaption><pre><code class="language-text">Projet : React 19 + Vite. Fichiers joints : TasksPage.jsx, TaskList.jsx, TaskItem.jsx.
+
+Je veux ajouter un filtre « masquer les tâches terminées », mémorisé dans l'URL (?hideDone=1).
+Contraintes :
+- pas de nouvelle dépendance ;
+- pas d'état dupliqué ni de useEffect pour calculer la liste filtrée ;
+- respecte le style des composants existants.
+
+D'abord, propose un plan : quel composant possède l'état, quelles props changent.
+Attends ma validation avant d'écrire le code.</code></pre></figure>
+<figure class="code"><figcaption>prompt · débugger</figcaption><pre><code class="language-text">Erreur dans la console : « Maximum update depth exceeded »
+Elle apparaît quand j'ouvre la page /tasks/42.
+Voici le composant concerné et son hook.
+Ce que j'ai déjà vérifié : la réponse de l'API est correcte dans l'onglet Réseau.
+
+Donne-moi les causes les plus probables, de la plus à la moins probable,
+et comment vérifier chacune dans les React DevTools avant de corriger.</code></pre></figure>
+<p>Remarque le point commun : on demande d'abord une <strong>explication</strong> ou un <strong>plan</strong>, puis du code. Le plan se relit en trente secondes ; trois cents lignes de code, non.</p>
+
+<h3>Travailler par petits pas</h3>
+<ol class="chain" aria-label="Une boucle de travail avec l'IA">
+  <li><b>Plan</b><span>quel composant possède l'état, quels fichiers changent</span></li>
+  <li><b>Une petite modification</b><span>un fichier ou une fonction à la fois</span></li>
+  <li><b>Lancer</b><span>la page fonctionne, la console est propre</span></li>
+  <li><b>Lire le diff</b><span>chaque ligne, avec la grille ci-dessous</span></li>
+  <li><b>Demander « pourquoi ? »</b><span>sur toute ligne que tu ne saurais pas réexpliquer</span></li>
+  <li><b>Commiter</b><span>puis le pas suivant</span></li>
+</ol>
+<p>Si une modification casse quelque chose, tu sais exactement laquelle, et tu peux revenir en arrière sans perdre le reste. Une génération de dix fichiers d'un coup ne permet ni l'un ni l'autre.</p>
+
+<h3>Les signaux d'alerte en relecture</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Tu vois…</th><th>Pourquoi c'est suspect</th></tr></thead>
+<tbody>
+<tr><td>Un <code>useEffect</code> qui fait juste <code>setX(calcul(...))</code></td><td>Valeur dérivée : un rendu de retard et un risque d'incohérence. Un calcul direct suffit (module 08).</td></tr>
+<tr><td><code>// eslint-disable-next-line react-hooks/exhaustive-deps</code></td><td>Le linter a vu une dépendance manquante et on l'a fait taire : closure périmée probable.</td></tr>
+<tr><td><code>push</code>, <code>sort()</code>, <code>obj.x = …</code> sur un état ou une prop</td><td>Mutation : l'écran ne se met pas à jour, ou de façon aléatoire (module 05).</td></tr>
+<tr><td><code>key={index}</code> ou <code>key={Math.random()}</code></td><td>État qui glisse entre les lignes, ou éléments recréés à chaque rendu (module 06).</td></tr>
+<tr><td>Un <code>fetch</code> dans un effet sans nettoyage</td><td>Réponses périmées. Et si le projet utilise déjà React Query, l'IA réinvente la roue.</td></tr>
+<tr><td>Un composant déclaré dans un autre composant</td><td>État perdu et focus perdu à chaque rendu (module 03).</td></tr>
+<tr><td><code>useMemo</code> et <code>useCallback</code> partout</td><td>Optimisation sans mesure ; inutile avec le React Compiler (module 09).</td></tr>
+<tr><td>Un contexte géant qui contient tout</td><td>Tous les consommateurs se re-rendent à chaque changement (module 10).</td></tr>
+<tr><td><code>dangerouslySetInnerHTML</code> avec une donnée saisie par un utilisateur</td><td>Faille XSS : le texte devient du HTML exécutable (module 03, règle 10).</td></tr>
+<tr><td>Composants en classe, <code>ReactDOM.render</code>, <code>create-react-app</code>, <code>defaultProps</code> sur une fonction, <code>forwardRef</code> dans du code neuf</td><td>APIs anciennes. <code>ReactDOM.render</code> et <code>defaultProps</code> sur les fonctions ont été supprimés en React 19.</td></tr>
+<tr><td>Une fonction ou une option que tu ne trouves nulle part</td><td>API inventée. Vérifie sur react.dev ou dans la documentation de la bibliothèque.</td></tr>
+<tr><td>Un composant de plusieurs centaines de lignes qui charge, calcule et affiche</td><td>À découper : un custom hook pour la logique, des sous-composants pour l'affichage.</td></tr>
+</tbody></table></div>
+
+<h3>Entraîne-toi : relis ce code généré</h3>
+<p>On a demandé à une IA « un composant de recherche dans les tâches ». Le code fonctionne en apparence, mais il contient <strong>six problèmes</strong>. Clique sur chaque ligne que tu trouves suspecte : la ligne te dira si tu as vu juste, et pourquoi.</p>
+
+<div class="demo" id="demo-review">
+  <div class="demo-head"><span>Démo · relecture de code</span><span><span data-out="found">0</span> / 6 problèmes trouvés · <button type="button" class="btn ghost small" data-act="reset">Recommencer</button></span></div>
+  <div class="demo-body">
+    <div class="review">
+      <pre class="review-code" aria-label="Code généré, une ligne par bouton"><button type="button" class="rl" data-l="1"><span class="rn">1</span>import { useState, useEffect } from "react";</button><button type="button" class="rl" data-l="2"><span class="rn">2</span> </button><button type="button" class="rl" data-l="3"><span class="rn">3</span>export default function TaskSearch({ tasks }) {</button><button type="button" class="rl" data-l="4"><span class="rn">4</span>  const [query, setQuery] = useState("");</button><button type="button" class="rl" data-l="5"><span class="rn">5</span>  const [results, setResults] = useState([]);</button><button type="button" class="rl" data-l="6"><span class="rn">6</span> </button><button type="button" class="rl" data-l="7"><span class="rn">7</span>  useEffect(() =&gt; {</button><button type="button" class="rl" data-l="8"><span class="rn">8</span>    setResults(tasks.filter(t =&gt; t.title.includes(query)));</button><button type="button" class="rl" data-l="9"><span class="rn">9</span>  }, [query]);</button><button type="button" class="rl" data-l="10"><span class="rn">10</span> </button><button type="button" class="rl" data-l="11"><span class="rn">11</span>  const sorted = results.sort((a, b) =&gt; a.title.localeCompare(b.title));</button><button type="button" class="rl" data-l="12"><span class="rn">12</span> </button><button type="button" class="rl" data-l="13"><span class="rn">13</span>  return (</button><button type="button" class="rl" data-l="14"><span class="rn">14</span>    &lt;&gt;</button><button type="button" class="rl" data-l="15"><span class="rn">15</span>      &lt;input value={query} onChange={e =&gt; setQuery(e.target.value)} /&gt;</button><button type="button" class="rl" data-l="16"><span class="rn">16</span>      &lt;ul&gt;</button><button type="button" class="rl" data-l="17"><span class="rn">17</span>        {sorted.map((t, i) =&gt; (</button><button type="button" class="rl" data-l="18"><span class="rn">18</span>          &lt;li key={i}&gt;</button><button type="button" class="rl" data-l="19"><span class="rn">19</span>            &lt;span dangerouslySetInnerHTML={{ __html: t.title }} /&gt;</button><button type="button" class="rl" data-l="20"><span class="rn">20</span>          &lt;/li&gt;</button><button type="button" class="rl" data-l="21"><span class="rn">21</span>        ))}</button><button type="button" class="rl" data-l="22"><span class="rn">22</span>      &lt;/ul&gt;</button><button type="button" class="rl" data-l="23"><span class="rn">23</span>    &lt;/&gt;</button><button type="button" class="rl" data-l="24"><span class="rn">24</span>  );</button><button type="button" class="rl" data-l="25"><span class="rn">25</span>}</button></pre>
+      <div class="review-side" data-out="explain" aria-live="polite"><p class="muted">Clique sur une ligne du code.</p></div>
+    </div>
+  </div>
+</div>
+<details class="solution"><summary>Voir la version corrigée</summary>
+<figure class="code"><figcaption>TaskSearch.jsx <span class="tag good">corrigé</span></figcaption><pre><code class="language-jsx">import { useState } from "react";
+
+export default function TaskSearch({ tasks }) {
+  const [query, setQuery] = useState("");
+
+  // Une valeur dérivée : ni état, ni effet. toSorted ne modifie pas le tableau d'origine.
+  const results = tasks
+    .filter(t => t.title.toLowerCase().includes(query.toLowerCase()))
+    .toSorted((a, b) => a.title.localeCompare(b.title));
+
+  return (
+    <>
+      <input value={query} onChange={e => setQuery(e.target.value)} />
+      <ul>
+        {results.map(t => (
+          <li key={t.id}>{t.title}</li>   // une key stable, et du texte protégé par React
+        ))}
+      </ul>
+    </>
+  );
+}</code></pre></figure>
+<p>La version corrigée est plus courte, sans effet, et toujours juste dès le premier rendu. Un signe fréquent : quand du code React se simplifie en le corrigeant, c'est qu'on se rapproche du bon modèle.</p>
+</details>
+
+<aside class="note trap"><p class="label">Piège · sécurité</p>
+<ul>
+<li><strong>Tout le code front est public.</strong> Une clé d'API placée dans le code React, y compris dans une variable <code>VITE_…</code>, finit dans le JavaScript téléchargé par le navigateur. Les secrets restent côté backend.</li>
+<li><strong><code>dangerouslySetInnerHTML</code></strong> avec du contenu venu d'un utilisateur ouvre la porte aux failles XSS.</li>
+<li><strong>Une validation côté front</strong> améliore l'expérience, mais ne protège rien : ton API doit tout revalider.</li>
+</ul>
+</aside>
+
+<h3>Apprendre avec l'IA</h3>
+<ul>
+<li><strong>Explique, puis reformule</strong> : demande une explication, réexplique avec tes mots, et demande à l'IA de corriger ta compréhension.</li>
+<li><strong>Demande ce qui pourrait casser</strong> : « quels cas limites ce code ne gère-t-il pas ? »</li>
+<li><strong>Fais écrire les tests</strong> : une proposition de tests avec Testing Library révèle souvent des comportements auxquels tu n'avais pas pensé.</li>
+<li><strong>Demande la fiche d'identité</strong> d'un composant (module 15) : props, état, contextes et hooks, effets, affichage.</li>
+<li><strong>Vérifie les affirmations</strong> sur les versions et les API dans la documentation officielle : c'est là que l'IA se trompe le plus souvent.</li>
+</ul>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Un bon prompt donne les versions, les fichiers, les contraintes, et demande un plan avant le code.</li>
+<li>Avance par petits pas : une modification, on lance, on lit le diff, on demande pourquoi, on commite.</li>
+<li>Relis avec la grille : effets inutiles, dépendances muselées, mutations, keys instables, APIs anciennes ou inventées, failles de sécurité.</li>
+</ul>
+</aside>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">L'IA propose <code>useEffect(() => setTotal(items.reduce((s, i) => s + i.price, 0)), [items])</code>. Ta réaction ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Remplacer par <code>const total = items.reduce(...)</code> dans le rendu.</button>
+    <button type="button" data-k="b">Accepter : les dépendances sont correctes.</button>
+    <button type="button" data-k="c">Ajouter <code>total</code> dans les dépendances.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Le total se calcule à partir de <code>items</code> : c'est une valeur dérivée. L'effet ajoute un rendu intermédiaire faux et un état de plus à maintenir. C'est le signal d'alerte n°1 de la grille.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Tu demandes une fonctionnalité qui touche cinq fichiers. Quelle est la meilleure façon de procéder avec l'IA ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Lui demander les cinq fichiers complets d'un coup, puis tester.</button>
+    <button type="button" data-k="b">La laisser choisir la structure, elle connaît React mieux que toi.</button>
+    <button type="button" data-k="c">Demander un plan, le valider, puis avancer fichier par fichier en vérifiant chaque étape.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un plan se relit vite et te garde aux commandes. Les petits pas te permettent de lire chaque diff, de localiser une régression et de revenir en arrière sans tout perdre.</p>
+</div>
+</section><!--/m16-->

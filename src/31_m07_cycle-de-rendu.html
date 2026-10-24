@@ -1,0 +1,339 @@
+
+<!-- ===================================================== 07 -->
+<section class="module" id="m07" data-short="Le cycle de rendu">
+<header class="module-head"><span class="module-num">07</span><div><p class="module-kicker">Modèle mental</p><h2>Le cycle de rendu : ce qui se passe vraiment</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Savoir ce qui déclenche un rendu, et ce que React fait ensuite.</li>
+  <li>Comprendre pourquoi un composant doit rester « pur ».</li>
+  <li>Comprendre que chaque rendu garde ses propres valeurs, comme une photo.</li>
+  <li>Décider où placer un état dont plusieurs composants ont besoin.</li>
+  <li>Savoir quand React conserve l'état d'un composant, et quand il l'efface.</li>
+</ul></div>
+<p>Ce module est le plus utile pour débugger : la plupart des bugs React viennent d'une idée fausse sur le <strong>moment</strong> où le code s'exécute. Au module 00, on a vu le cycle complet en six étapes. Ici, on regarde de près ce qui se passe entre « une donnée change » et « l'écran est à jour ».</p>
+
+<h3>« Rendre » ne veut pas dire « dessiner »</h3>
+<p>Le mot prête à confusion. En React, <strong>rendre</strong> un composant, c'est simplement <strong>appeler sa fonction</strong> pour savoir quel JSX elle renvoie. Rien ne change encore à l'écran. Le travail se fait en quatre temps :</p>
+<ol class="steps">
+  <li><b>Déclenchement</b><span>le premier affichage, ou un setter appelé quelque part (<code>setTasks(...)</code>).</span></li>
+  <li><b>Rendu</b><span>React appelle tes composants. Ils calculent et renvoient leur JSX. C'est un calcul, sans effet visible.</span></li>
+  <li><b>Commit</b><span>React compare le nouveau JSX à l'ancien et applique les différences au DOM.</span></li>
+  <li><b>Effets</b><span>une fois l'écran à jour, React exécute les <code>useEffect</code> concernés (module 08).</span></li>
+</ol>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Un architecte et un chantier. Le <strong>rendu</strong>, c'est dessiner le plan : on peut en dessiner dix versions, rien ne bouge dans la maison. Le <strong>commit</strong>, ce sont les travaux : on ne casse que les murs qui diffèrent entre l'ancien plan et le nouveau. Les <strong>effets</strong> viennent ensuite, une fois la pièce terminée : brancher la box Internet, par exemple.</p>
+</aside>
+<p>Tu peux observer cet ordre avec trois <code>console.log</code> placés à trois endroits différents :</p>
+<figure class="code"><figcaption>TaskCount.jsx · l'ordre d'exécution</figcaption><pre><code class="language-jsx">function TaskCount({ tasks }) {
+  console.log("1 · rendu : je calcule mon JSX");           // pendant le rendu
+
+  useEffect(() => {
+    console.log("3 · effet : l'écran est déjà à jour");    // après le commit
+  });
+
+  return <p>{tasks.length} tâches</p>;                     // 2 · commit : React écrit ce <p> dans le DOM
+}</code></pre></figure>
+
+<h3>Qu'est-ce qui déclenche un nouveau rendu ?</h3>
+<p>Un composant se re-rend dans trois cas, et seulement ceux-là :</p>
+<ol>
+<li><strong>Son propre état change</strong> : un de ses setters est appelé avec une nouvelle valeur.</li>
+<li><strong>Son parent se re-rend</strong> : par défaut, un rendu descend vers tous les enfants, même si leurs props n'ont pas changé.</li>
+<li><strong>Un contexte qu'il lit change</strong> (module 10).</li>
+</ol>
+<p>Les props ne sont pas une quatrième cause : si les props d'un composant changent, c'est forcément que son parent s'est re-rendu. Essaie sur l'arbre de TaskFlow : chaque bouton appelle un setter dans un composant différent.</p>
+
+<div class="demo" id="demo-render">
+  <div class="demo-head"><span>Démo · qui se re-rend ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="demo-actions">
+      <button type="button" class="btn" data-set="app">App : setUnread(unread + 1)</button>
+      <button type="button" class="btn" data-set="list">TaskList : setTitle(…)</button>
+      <button type="button" class="btn" data-set="item2">TaskItem n°2 : setIsEditing(…)</button>
+    </div>
+    <ul class="rtree" aria-label="Arbre de composants">
+      <li><span class="rnode" data-node="app">App <em data-note="app">état : unread = 3</em> <b>1</b></span>
+        <ul>
+          <li><span class="rnode" data-node="header">Header <em data-note="header">affiche « 3 notifications »</em> <b>1</b></span></li>
+          <li><span class="rnode" data-node="list">TaskList <em data-note="list">état : title = « Mes tâches »</em> <b>1</b></span>
+            <ul>
+              <li><span class="rnode" data-node="item1">TaskItem n°1 <b>1</b></span></li>
+              <li><span class="rnode" data-node="item2">TaskItem n°2 <em data-note="item2">état : isEditing = false</em> <b>1</b></span></li>
+              <li><span class="rnode" data-node="item3">TaskItem n°3 <b>1</b></span></li>
+            </ul>
+          </li>
+          <li><span class="rnode" data-node="footer">Footer <b>1</b></span></li>
+        </ul>
+      </li>
+    </ul>
+    <p class="demo-status" data-out="stats">Le chiffre de chaque composant compte ses rendus.</p>
+    <p class="demo-hint" data-out="explain" aria-live="polite">Clique sur un bouton : les composants qui se re-rendent clignotent.</p>
+  </div>
+</div>
+
+<p>Retiens la règle de la cascade : un rendu part du composant dont l'état change et <strong>descend</strong> vers tout ce qui est en dessous. Ce qui est au-dessus ou à côté ne bouge pas.</p>
+
+<h3>Re-rendre n'est pas repeindre</h3>
+<p>Regarde la ligne d'état de la démo. Quand <code>App</code> change d'état, React appelle 7 fonctions, mais ne modifie qu'un seul endroit du DOM : le texte du badge. Les six autres composants ont renvoyé exactement le même JSX qu'avant, donc React n'a rien eu à toucher.</p>
+<p>Appeler des fonctions JavaScript est très rapide. C'est la modification du DOM qui coûte, et React la limite au strict nécessaire. N'essaie donc pas d'éviter les re-rendus « par principe » : on optimise seulement quand on mesure une vraie lenteur (module 09).</p>
+
+<h3>Un rendu doit être pur</h3>
+<p>Une fonction est <strong>pure</strong> si elle respecte deux règles :</p>
+<ul>
+<li><strong>mêmes entrées, même résultat</strong> : avec les mêmes props, le même état et le même contexte, le composant renvoie toujours le même JSX ;</li>
+<li><strong>aucun effet de bord</strong> : pendant le rendu, il ne modifie rien qui existait avant lui (une variable extérieure, le DOM, une requête réseau).</li>
+</ul>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Une formule de tableur. <code>=A1*2</code> calcule sa propre cellule, et rien d'autre. Elle ne va jamais écrire dans la cellule voisine, et on peut la recalculer cent fois sans rien casser.</p>
+</aside>
+<p>Pourquoi React y tient-il autant ? Parce qu'il se réserve le droit d'appeler ton composant <strong>plus souvent que tu ne le crois</strong> : à chaque rendu du parent, deux fois de suite en développement (StrictMode), ou en préparant un affichage qu'il finira par jeter. Si ton composant modifie quelque chose à chaque appel, ces appels supplémentaires deviennent des bugs visibles.</p>
+<p>Voici l'exemple classique. Le composant <code>Cup</code> numérote les tasses de thé en incrémentant une variable extérieure. Clique sur « Re-rendre », puis active StrictMode :</p>
+
+<div class="demo" id="demo-pure">
+  <div class="demo-head"><span>Démo · un composant impur</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Version du composant">
+      <button type="button" role="radio" aria-checked="true" data-mode="impure">Version impure</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="pure">Version pure</button>
+    </div>
+    <label class="pp-check"><input id="pure-strict" type="checkbox"> StrictMode (développement)</label>
+    <figure class="code compact"><figcaption>TeaSet.jsx</figcaption><pre><code class="language-jsx" data-out="code">let guest = 0;</code></pre></figure>
+    <div class="demo-split">
+      <div><p class="label">L'écran</p><ul class="mini-list" data-out="cups"></ul></div>
+      <div><p class="label">Valeur de la variable extérieure</p><p class="big-num" data-out="guest">0</p></div>
+    </div>
+    <div class="demo-actions"><button type="button" class="btn" data-act="render">Re-rendre TeaSet</button></div>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite"></p>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+
+<div class="compare">
+<figure class="code"><figcaption>Impur <span class="tag bad">à éviter</span></figcaption><pre><code class="language-jsx">let guest = 0;           // en dehors du composant
+
+function Cup() {
+  guest = guest + 1;     // modifié PENDANT le rendu
+  return <li>Tasse pour l'invité n°{guest}</li>;
+}</code></pre></figure>
+<figure class="code"><figcaption>Pur <span class="tag good">correct</span></figcaption><pre><code class="language-jsx">function Cup({ guest }) {  // la donnée arrive en prop
+  return <li>Tasse pour l'invité n°{guest}</li>;
+}
+
+// <Cup guest={1} /> <Cup guest={2} /> <Cup guest={3} /></code></pre></figure>
+</div>
+<p>Les effets de bord ont deux places légitimes, jamais le corps du composant :</p>
+<ul>
+<li>les <strong>gestionnaires d'événements</strong> (<code>onClick</code>, <code>onSubmit</code>), pour réagir à une action de l'utilisateur ;</li>
+<li><strong><code>useEffect</code></strong>, pour se synchroniser avec l'extérieur quand le composant s'affiche (module 08).</li>
+</ul>
+<aside class="note key"><p class="label">À retenir</p>
+<p>En développement, <code>StrictMode</code> appelle volontairement tes composants <strong>deux fois</strong> pour faire apparaître les impuretés, comme dans la démo. Si tes <code>console.log</code> s'affichent en double, ce n'est pas un bug. En production, chaque rendu n'a lieu qu'une fois.</p>
+</aside>
+
+<h3>Chaque rendu garde ses propres valeurs</h3>
+<p>Au module 05, on a vu que l'état est une <strong>photo</strong> prise au moment du rendu. Ce principe va plus loin : les fonctions créées pendant un rendu (gestionnaires, minuteurs, callbacks) voient les valeurs <strong>de ce rendu-là</strong>, pour toujours.</p>
+<figure class="code"><figcaption>Counter.jsx</figcaption><pre><code class="language-jsx">function Counter() {
+  const [count, setCount] = useState(0);
+
+  function showLater() {
+    setTimeout(() => {
+      show(`count vaut ${count}`);  // le count du rendu où showLater a été créée
+    }, 3000);
+  }
+
+  return (
+    <>
+      <button onClick={() => setCount(count + 1)}>+1</button>
+      <button onClick={showLater}>Afficher count dans 3 secondes</button>
+    </>
+  );
+}</code></pre></figure>
+<p>Clique sur « Afficher dans 3 secondes », puis tout de suite plusieurs fois sur « +1 ». Que va afficher le message ?</p>
+
+<div class="demo" id="demo-snap">
+  <div class="demo-head"><span>Démo · la photo du rendu</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <p class="demo-status">À l'écran : <code>count</code> = <strong data-out="count">0</strong> · rendu n°<strong data-out="renders">1</strong></p>
+    <div class="demo-actions">
+      <button type="button" class="btn" data-act="inc">+1</button>
+      <button type="button" class="btn ghost" data-act="later">Afficher count dans 3 secondes</button>
+    </div>
+    <ul class="mini-list" data-out="msgs"><li class="muted">Aucun message programmé.</li></ul>
+  </div>
+</div>
+
+<p>Le message affiche la valeur du moment du clic, pas la valeur actuelle. La fonction programmée a été créée pendant un rendu précis, avec sa photo de <code>count</code>. Les rendus suivants ont créé de nouvelles fonctions, avec de nouvelles photos, mais l'ancienne n'a pas changé.</p>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Une photo de groupe. Si quelqu'un quitte la pièce après le déclic, il reste sur la photo. Chaque rendu prend sa propre photo des props et de l'état, et toutes les fonctions créées pendant ce rendu regardent cette photo-là.</p>
+</aside>
+<p>Ce comportement est voulu : il évite qu'une valeur change « dans le dos » d'une fonction en cours. Il explique aussi un bug fréquent avec les minuteurs, la <em>closure périmée</em>, qu'on verra au module 08.</p>
+
+<h3>Où vit l'état ? Remonter l'état</h3>
+<p>Prenons une page de tâches avec une barre de recherche. La barre <strong>écrit</strong> la requête, la liste doit la <strong>lire</strong> pour filtrer. Où placer <code>query</code> ?</p>
+<div class="tree-compare">
+  <div class="tc">
+    <p class="label tc-bad">Avant · l'état est enfermé</p>
+    <ul class="rtree">
+      <li><span class="rnode">TasksPage</span>
+        <ul>
+          <li><span class="rnode provider">SearchBar <em>état : query</em></span></li>
+          <li><span class="rnode">TaskList <em>ne peut pas lire query</em></span></li>
+        </ul>
+      </li>
+    </ul>
+    <p class="tc-note">Un composant ne peut pas lire l'état de son frère : les données ne circulent que du parent vers l'enfant.</p>
+  </div>
+  <div class="tc">
+    <p class="label tc-good">Après · l'état est remonté</p>
+    <ul class="rtree">
+      <li><span class="rnode provider">TasksPage <em>état : query</em></span>
+        <ul>
+          <li><span class="rnode consumer">SearchBar <em>reçoit value, onChange</em></span></li>
+          <li><span class="rnode consumer">TaskList <em>reçoit query</em></span></li>
+        </ul>
+      </li>
+    </ul>
+    <p class="tc-note">Le parent commun possède l'état et le donne aux deux : la valeur à l'un, la valeur et le moyen de la changer à l'autre.</p>
+  </div>
+</div>
+<p>Essaie les deux versions : tape un mot dans la barre de recherche.</p>
+
+<div class="demo" id="demo-lift">
+  <div class="demo-head"><span>Démo · remonter l'état</span></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Emplacement de l'état">
+      <button type="button" role="radio" aria-checked="true" data-mode="local">État dans SearchBar</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="lifted">État remonté dans TasksPage</button>
+    </div>
+    <figure class="code compact"><figcaption>TasksPage.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-split">
+      <div class="demo-col">
+        <p class="demo-title">SearchBar</p>
+        <label class="sr-only" for="lift-input">Rechercher une tâche</label>
+        <input id="lift-input" class="text-in" type="text" placeholder="Rechercher (essaie « lire »)" autocomplete="off">
+        <p class="demo-hint" data-out="owner"></p>
+      </div>
+      <div class="demo-col">
+        <p class="demo-title">TaskList</p>
+        <ul class="mini-list" data-out="list"></ul>
+        <p class="demo-hint" data-out="note"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<figure class="code"><figcaption>TasksPage.jsx · la version remontée</figcaption><pre><code class="language-jsx">function TasksPage() {
+  const [query, setQuery] = useState("");  // 1. l'état vit chez le parent commun
+
+  return (
+    <>
+      <SearchBar value={query} onChange={setQuery} />  {/* 2. écrit, via le callback */}
+      <TaskList query={query} />                       {/* 3. lit, via une prop */}
+    </>
+  );
+}
+
+function SearchBar({ value, onChange }) {
+  return <input value={value} onChange={e => onChange(e.target.value)} />;
+}
+
+function TaskList({ query }) {
+  const visible = ALL_TASKS.filter(t =>
+    t.title.toLowerCase().includes(query.toLowerCase())
+  );
+  return <ul>{visible.map(t => <li key={t.id}>{t.title}</li>)}</ul>;
+}</code></pre></figure>
+<p>La règle : place l'état <strong>le plus bas possible</strong>, mais assez haut pour que tous ceux qui en ont besoin soient en dessous. Concrètement, c'est le <strong>parent commun le plus proche</strong>. Il n'y a alors qu'une seule source de vérité : impossible que la barre et la liste se contredisent.</p>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>C'est le même raisonnement que pour une donnée partagée entre deux services : plutôt que d'en garder deux copies à synchroniser, on lui donne un propriétaire unique, que les autres consultent.</p>
+</aside>
+
+<h3>Quand React garde-t-il l'état d'un composant ?</h3>
+<p>Dernière pièce du modèle mental. React ne range pas l'état d'un composant sous le nom de ta variable : il le range à la <strong>position</strong> du composant dans l'arbre. Trois règles en découlent :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Entre deux rendus, à la même position…</th><th>L'état est…</th></tr></thead>
+<tbody>
+<tr><td>le <strong>même type</strong> de composant, même si ses props changent</td><td><strong>conservé</strong></td></tr>
+<tr><td>un <strong>autre type</strong> de composant (ou une balise différente)</td><td><strong>détruit</strong> : le nouveau repart de zéro</td></tr>
+<tr><td>le même type, mais avec une <strong><code>key</code> différente</strong></td><td><strong>détruit</strong> : React le considère comme un nouveau composant</td></tr>
+</tbody></table></div>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Un vestiaire numéroté. React range l'état de chaque composant dans le casier correspondant à sa place dans l'arbre. Tant que le même type de composant revient au même casier, il retrouve ses affaires. Si un autre type de composant prend la place, ou si l'étiquette du casier change (la <code>key</code>), le casier est vidé.</p>
+</aside>
+<p>Incrémente le compteur, puis bascule. Compare les trois scénarios :</p>
+
+<div class="demo" id="demo-identity">
+  <div class="demo-head"><span>Démo · l'état survit-il ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Scénario">
+      <button type="button" role="radio" aria-checked="true" data-mode="same">Même type</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="type">Autre type</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="key">Autre key</button>
+    </div>
+    <figure class="code compact"><figcaption>Panel.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="stage" data-out="stage"></div>
+    <div class="demo-actions"><button type="button" class="btn ghost" data-act="toggle">Basculer</button></div>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite"></p>
+  </div>
+</div>
+<p>Ces règles expliquent deux bugs du module 06 : une liste avec <code>key={index}</code> dont l'état glisse d'une ligne à l'autre, et un champ qui perd ce qu'on a tapé parce que son composant a été déclaré à l'intérieur d'un autre (son type change à chaque rendu). Elles expliquent aussi l'astuce <code>&lt;Form key={userId} /&gt;</code> : changer la key pour repartir d'un formulaire vierge.</p>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Rendre = appeler ta fonction. Le commit applique ensuite les seules différences au DOM, et les effets viennent après.</li>
+<li>Un rendu part du composant dont l'état change et descend vers tous ses enfants. Re-rendre ne coûte presque rien ; modifier le DOM, si.</li>
+<li>Un composant doit être pur : pas de modification extérieure pendant le rendu. Les effets de bord vont dans les gestionnaires ou dans <code>useEffect</code>.</li>
+<li>Chaque rendu a ses propres valeurs ; les fonctions créées pendant ce rendu les gardent.</li>
+<li>Un état partagé vit chez le parent commun le plus proche. React conserve l'état tant que le type, la position et la key restent les mêmes.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice · prédis les rendus</p>
+<figure class="code"><figcaption>l'arbre de l'exercice</figcaption><pre><code class="language-text">App            (état : dark)
+├── Header
+└── SearchPage
+    ├── SearchBox  (état : query)
+    └── Results</code></pre></figure>
+<ol>
+<li>On appelle <code>setDark(true)</code> dans <code>App</code>. Quels composants se re-rendent ?</li>
+<li>On tape une lettre : <code>setQuery</code> est appelé dans <code>SearchBox</code>. Quels composants se re-rendent ?</li>
+<li>On veut que <code>Results</code> filtre selon <code>query</code>. Où faut-il placer cet état ? Qui se re-rend alors à chaque frappe ?</li>
+<li>Après la question 3, on bascule <code>dark</code>. Le texte tapé dans <code>SearchBox</code> est-il conservé ?</li>
+</ol>
+<details class="solution"><summary>Voir la solution</summary>
+<ol>
+<li>Les cinq : <code>App</code> et tout ce qui est en dessous (<code>Header</code>, <code>SearchPage</code>, <code>SearchBox</code>, <code>Results</code>).</li>
+<li><code>SearchBox</code> seulement : son parent et ses frères ne sont pas concernés.</li>
+<li>Dans <code>SearchPage</code>, leur parent commun le plus proche. À chaque frappe, <code>SearchPage</code>, <code>SearchBox</code> et <code>Results</code> se re-rendent.</li>
+<li>Oui : <code>SearchPage</code> reste du même type, à la même position. Son état <code>query</code> est conservé, même si tout se re-rend.</li>
+</ol>
+</details>
+</div>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Un parent se re-rend. Les props de son enfant sont identiques. L'enfant se re-rend-il ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Oui, par défaut tous les enfants se re-rendent avec leur parent.</button>
+    <button type="button" data-k="b">Non, React compare toujours les props avant.</button>
+    <button type="button" data-k="c">Seulement s'il a un état.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Par défaut, un rendu descend tout le sous-arbre. Le DOM, lui, n'est modifié que là où le résultat change. On peut éviter ces rendus avec <code>memo</code> ou le React Compiler (module 09), mais seulement s'ils posent un problème mesuré.</p>
+</div>
+<div class="quiz" data-answer="b">
+  <p class="quiz-q"><code>Filters</code> et <code>ResultsTable</code> sont frères et ont besoin du même filtre. Où vit l'état ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Dans <code>Filters</code>, qui l'envoie à <code>ResultsTable</code>.</button>
+    <button type="button" data-k="b">Dans leur parent commun, qui le passe aux deux en props.</button>
+    <button type="button" data-k="c">Dans les deux, synchronisés avec un <code>useEffect</code>.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un frère ne peut pas passer de props à un autre frère. On remonte l'état chez le parent commun, qui donne la valeur aux deux et un callback à celui qui la modifie. Deux états synchronisés par un effet, ce sont deux sources de vérité.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q"><code>{isEditing ? &lt;EditForm /&gt; : &lt;ReadView /&gt;}</code> : on passe en lecture puis on revient en édition. Le texte tapé dans <code>EditForm</code> est-il encore là ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Oui, React garde l'état de tous les composants.</button>
+    <button type="button" data-k="b">Oui, si <code>EditForm</code> utilise <code>useState</code>.</button>
+    <button type="button" data-k="c">Non : un autre type de composant a pris sa place, son état a été détruit.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>À cette position, <code>EditForm</code> a été remplacé par <code>ReadView</code> : React a vidé le casier. Au retour, c'est un <code>EditForm</code> neuf. Pour garder le brouillon, il faut remonter l'état au-dessus de la condition.</p>
+</div>
+</section><!--/m07-->

@@ -1,0 +1,220 @@
+
+<!-- ===================================================== 12 -->
+<section class="module" id="m12" data-short="Suspense et lazy">
+<header class="module-head"><span class="module-num">12</span><div><p class="module-kicker">Chargement</p><h2>Suspense et lazy : déclarer les états de chargement</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Comprendre ce que veut dire « un composant suspend », étape par étape.</li>
+  <li>Découper le code avec <code>lazy</code> pour charger une page seulement quand on en a besoin.</li>
+  <li>Savoir ce qui déclenche Suspense, et ce qui ne le déclenche pas.</li>
+  <li>Placer ses boundaries pour que l'écran s'affiche par blocs cohérents.</li>
+</ul></div>
+
+<h3>Le problème : des isLoading partout</h3>
+<p>Avec le motif du module 08, chaque composant qui charge quelque chose gère lui-même son chargement :</p>
+<figure class="code"><figcaption>Dashboard.jsx · chaque composant se débrouille</figcaption><pre><code class="language-jsx">function TaskList() {
+  const { data, isLoading, error } = useFetch("/api/tasks");
+  if (isLoading) return <Spinner />;
+  if (error) return <ErrorMessage error={error} />;
+  return <ul>{/* … */}</ul>;
+}
+
+function StatsChart() {
+  const { data, isLoading, error } = useFetch("/api/stats");
+  if (isLoading) return <Spinner />;
+  if (error) return <ErrorMessage error={error} />;
+  return <Chart data={data} />;
+}</code></pre></figure>
+<p>Ça fonctionne, mais chaque composant répète les mêmes conditions, et l'écran affiche plusieurs indicateurs de chargement qui disparaissent un par un, dans un ordre imprévisible. Suspense propose de sortir cette question des composants.</p>
+
+<h3>L'idée de Suspense</h3>
+<p>Avec Suspense, un composant qui n'est pas prêt (son code ou ses données sont en cours de chargement) <strong>suspend</strong> : il signale à React qu'il attend. Le <code>&lt;Suspense&gt;</code> le plus proche au-dessus de lui affiche alors un contenu de remplacement, le <code>fallback</code>, à sa place.</p>
+<figure class="code"><figcaption>suspense.jsx</figcaption><pre><code class="language-jsx">import { Suspense } from "react";
+
+<Suspense fallback={<Spinner />}>
+  <Comments />   {/* si Comments suspend, Spinner s'affiche à sa place */}
+</Suspense></code></pre></figure>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Au théâtre, le rideau reste baissé tant que le décor n'est pas en place. Les comédiens ne viennent pas un par un annoncer « je ne suis pas prêt ». <code>&lt;Suspense&gt;</code> est le rideau, <code>fallback</code> est ce qu'on projette dessus en attendant, et c'est toi qui décides où poser les rideaux.</p>
+</aside>
+
+<h3>Comment ça marche, pas à pas</h3>
+<ol class="steps five">
+  <li><b>React rend Comments</b><span>comme n'importe quel composant.</span></li>
+  <li><b>Comments suspend</b><span>ses données ne sont pas prêtes : il signale à React qu'il attend une promesse.</span></li>
+  <li><b>React remonte</b><span>jusqu'au <code>&lt;Suspense&gt;</code> le plus proche et affiche son <code>fallback</code>.</span></li>
+  <li><b>La promesse se résout</b><span>les données arrivent ; React réessaie de rendre Comments.</span></li>
+  <li><b>Le contenu remplace le fallback</b><span>cette fois, Comments a tout ce qu'il faut.</span></li>
+</ol>
+<p>Le composant lui-même ne contient plus que le cas où tout va bien. La question « que montre-t-on pendant l'attente ? » est réglée au-dessus de lui, une fois pour toute une zone.</p>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>C'est un <code>await</code> déclaratif. Le composant « attend » quelque chose, et c'est l'endroit où tu as placé <code>&lt;Suspense&gt;</code> qui décide de ce qu'on voit pendant l'attente, un peu comme un middleware qui encadre plusieurs routes.</p>
+</aside>
+
+<h3>Ce qui peut faire suspendre un composant</h3>
+<ol>
+<li><strong>Un composant chargé avec <code>lazy</code></strong>, dont le code n'est pas encore téléchargé.</li>
+<li><strong>Des données lues via une source compatible Suspense</strong> : un framework comme Next.js, <code>useSuspenseQuery</code> de React Query, ou <code>use(promesse)</code> avec une promesse mise en cache.</li>
+</ol>
+<aside class="note trap"><p class="label">Piège</p>
+<p>Suspense ne détecte <strong>pas</strong> les données chargées dans un <code>useEffect</code>. L'effet s'exécute après l'affichage : au moment où React a rendu le composant, il n'y avait rien à attendre. Avec le motif du module 08, c'est ton propre <code>isLoading</code> qui gère l'affichage, et le <code>fallback</code> ne s'affiche jamais.</p>
+</aside>
+
+<h3>lazy : télécharger le code seulement quand on en a besoin</h3>
+<p>Par défaut, Vite regroupe tout le code de l'application dans un seul fichier JavaScript, téléchargé à la première visite. Même l'utilisateur qui ne verra jamais le tableau de bord d'administration télécharge son code.</p>
+<div class="bundle" aria-label="Découpage du code avec lazy">
+  <div class="bundle-col">
+    <p class="label">Sans lazy</p>
+    <div class="bundle-file bf-main">main.js<small>900 Ko · tout, dès la première visite</small><i class="bf-bar" style="width:100%"></i></div>
+  </div>
+  <div class="bundle-col">
+    <p class="label">Avec lazy</p>
+    <div class="bundle-file bf-main">main.js<small>300 Ko · à la première visite</small><i class="bf-bar" style="width:33.3%"></i></div>
+    <div class="bundle-file bf-lazy">AdminDashboard.js<small>600 Ko · seulement si un admin ouvre la page</small><i class="bf-bar" style="width:66.7%"></i></div>
+  </div>
+</div>
+<figure class="code"><figcaption>App.jsx</figcaption><pre><code class="language-jsx">import { lazy, Suspense } from "react";
+
+// Déclaré au niveau du module, jamais à l'intérieur d'un composant
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard.jsx"));
+
+function App({ user }) {
+  return (
+    <Suspense fallback={<p>Chargement du tableau de bord…</p>}>
+      {user.isAdmin && <AdminDashboard />}
+    </Suspense>
+  );
+}</code></pre></figure>
+<p>Le premier affichage d'<code>AdminDashboard</code> suspend le temps de télécharger son fichier ; les suivants sont immédiats, le code est déjà là :</p>
+
+<div class="demo" id="demo-lazy">
+  <div class="demo-head"><span>Démo · lazy</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <p class="demo-status">Fichiers téléchargés : <strong data-out="files">main.js (300 Ko)</strong></p>
+    <div class="demo-actions"><button type="button" class="btn" data-act="toggle">Afficher le tableau de bord admin</button></div>
+    <div class="stage" data-out="stage"><p class="muted">Le tableau de bord n'est pas affiché.</p></div>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+<p>On utilise <code>lazy</code> surtout pour les pages (une par route) et pour les composants lourds rarement affichés : éditeur de texte riche, graphiques, carte. C'est l'équivalent d'un <code>import</code> placé à l'intérieur d'une fonction en Python.</p>
+
+<h3>use : lire une promesse</h3>
+<p>React 19 fournit <code>use</code>, qui lit le résultat d'une promesse. Tant qu'elle n'est pas résolue, le composant suspend.</p>
+<figure class="code"><figcaption>api.js et UserCard.jsx</figcaption><pre><code class="language-jsx">// api.js : un cache minimal pour que la MÊME promesse soit réutilisée
+const cache = new Map();
+
+export function fetchUser(id) {
+  if (!cache.has(id)) {
+    cache.set(id, fetch(`/api/users/${id}`).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }));
+  }
+  return cache.get(id);
+}
+
+// UserCard.jsx
+import { use } from "react";
+
+function UserCard({ id }) {
+  const user = use(fetchUser(id)); // suspend tant que la promesse n'est pas résolue
+  return <h2>{user.name}</h2>;     // ici, les données sont forcément là
+}
+
+// Page.jsx
+<Suspense fallback={<p>Chargement du profil…</p>}>
+  <UserCard id={42} />
+</Suspense></code></pre></figure>
+<p>Pourquoi le cache ? Au point 4 du schéma ci-dessus, React <strong>réessaie</strong> de rendre le composant. Si chaque rendu créait un nouveau <code>fetch</code>, il y aurait une nouvelle promesse à attendre à chaque essai, sans fin. La promesse doit donc être stable d'un rendu à l'autre. En pratique, c'est React Query ou le framework qui gère ce cache pour toi. Si la promesse est rejetée, l'erreur remonte à l'error boundary la plus proche (module suivant).</p>
+
+<h3>Placer ses boundaries</h3>
+<p>Tout ce qui est dans un même <code>&lt;Suspense&gt;</code> apparaît <strong>ensemble</strong>, quand le plus lent est prêt. Des boundaries imbriquées permettent au contraire d'afficher chaque zone dès qu'elle est prête. Dans la démo, l'en-tête est instantané, la liste met 1 seconde, le graphique 2,5 secondes :</p>
+
+<div class="demo" id="demo-sus">
+  <div class="demo-head"><span>Démo · une ou plusieurs boundaries</span></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Placement des boundaries">
+      <button type="button" role="radio" aria-checked="true" data-mode="one">Une seule boundary</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="nested">Boundaries imbriquées</button>
+    </div>
+    <figure class="code compact"><figcaption>DashboardPage.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-actions"><button type="button" class="btn" data-act="load">Charger la page</button></div>
+    <div class="dash" data-out="dash"></div>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+<p>Aucune version n'est « la bonne » dans l'absolu. Le bon découpage suit ce que l'utilisateur perçoit comme un bloc : un tableau et son titre doivent apparaître ensemble, alors que la liste des tâches n'a pas à attendre un graphique lent.</p>
+<figure class="code"><figcaption>DashboardPage.jsx · version imbriquée</figcaption><pre><code class="language-jsx"><Suspense fallback={<PageSkeleton />}>
+  <Header />
+  <Suspense fallback={<ListSkeleton />}>
+    <TaskList />      {/* apparaît dès que ses données sont prêtes */}
+  </Suspense>
+  <Suspense fallback={<ChartSkeleton />}>
+    <StatsChart />    {/* indépendamment du graphique */}
+  </Suspense>
+</Suspense></code></pre></figure>
+
+<h3>Garder l'ancien contenu pendant un changement</h3>
+<p>Un cas reste désagréable : l'utilisateur change d'onglet, le nouvel onglet suspend, et le contenu déjà visible disparaît derrière un fallback. En enveloppant la mise à jour dans <code>startTransition</code>, tu dis à React « cette mise à jour n'est pas urgente » : il garde l'ancien contenu affiché jusqu'à ce que le nouveau soit prêt.</p>
+<figure class="code"><figcaption>Tabs.jsx</figcaption><pre><code class="language-jsx">const [isPending, startTransition] = useTransition();
+
+function selectTab(tab) {
+  startTransition(() => setTab(tab)); // l'ancien onglet reste visible pendant le chargement du nouveau
+}
+
+// isPending permet d'afficher un indice discret (opacité réduite, petit indicateur)</code></pre></figure>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Un composant qui attend son code ou ses données « suspend » ; le <code>&lt;Suspense&gt;</code> le plus proche affiche son <code>fallback</code>, puis React réessaie quand c'est prêt.</li>
+<li>Seules les sources compatibles font suspendre : <code>lazy</code>, <code>use(promesse)</code> avec cache, les bibliothèques et frameworks. Pas un <code>useEffect</code>.</li>
+<li><code>lazy</code> découpe le code : une page n'est téléchargée que lorsqu'elle s'affiche.</li>
+<li>Tout ce qui est dans une même boundary apparaît ensemble ; imbriquer des boundaries permet d'afficher chaque bloc dès qu'il est prêt.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice · placer les rideaux</p>
+<p>Une page de projet affiche : un titre et la description du projet (rapides), la liste des membres (1 s), et un historique d'activité (3 s, rarement consulté, affiché en bas de page). La page « Paramètres » du projet est lourde et rarement ouverte. Où places-tu des <code>&lt;Suspense&gt;</code>, et que charges-tu avec <code>lazy</code> ?</p>
+<details class="solution"><summary>Voir la solution</summary>
+<ul>
+<li>Une boundary extérieure autour de la page, pour le titre et la description.</li>
+<li>Une boundary autour de la liste des membres, qui apparaît après une seconde sans attendre l'historique.</li>
+<li>Une boundary séparée autour de l'historique : il ne doit pas retarder le reste de la page.</li>
+<li><code>lazy</code> pour la page Paramètres : lourde et rarement ouverte, elle ne doit pas alourdir le premier chargement.</li>
+</ul>
+<figure class="code"><figcaption>ProjectPage.jsx</figcaption><pre><code class="language-jsx">const ProjectSettings = lazy(() => import("./ProjectSettings.jsx"));
+
+function ProjectPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <ProjectHeader />
+      <Suspense fallback={<MembersSkeleton />}>
+        <MemberList />
+      </Suspense>
+      <Suspense fallback={<p>Chargement de l'historique…</p>}>
+        <ActivityLog />
+      </Suspense>
+    </Suspense>
+  );
+}</code></pre></figure>
+</details>
+</div>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Lequel de ces cas fait afficher le <code>fallback</code> d'un <code>&lt;Suspense&gt;</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Un composant chargé avec <code>lazy</code> dont le code est en cours de téléchargement.</button>
+    <button type="button" data-k="b">Un composant qui charge ses données dans un <code>useEffect</code> et gère un <code>isLoading</code>.</button>
+    <button type="button" data-k="c">Un <code>setTimeout</code> en cours dans un gestionnaire de clic.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Seules les sources compatibles Suspense font suspendre un composant : <code>lazy</code>, <code>use(promesse)</code>, les bibliothèques et frameworks qui l'implémentent. Un <code>useEffect</code> s'exécute après l'affichage : React n'a rien attendu.</p>
+</div>
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Une page met la liste (1 s) et le graphique (3 s) dans un seul <code>&lt;Suspense&gt;</code>. Quand la liste apparaît-elle ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Après 1 seconde.</button>
+    <button type="button" data-k="b">Après 3 secondes, en même temps que le graphique.</button>
+    <button type="button" data-k="c">Immédiatement, vide.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Tout le contenu d'une boundary apparaît ensemble, quand le plus lent est prêt. Pour afficher la liste plus tôt, entoure chaque zone de sa propre boundary.</p>
+</div>
+</section><!--/m12-->

@@ -31,23 +31,31 @@ Ta progression (modules marqués comme lus) est enregistrée dans le navigateur,
 | 16 | Travailler avec l'IA | prompts, signaux d'alerte en relecture |
 | 17 | Antisèche et suite | résumé des hooks, glossaire, projet fil rouge |
 
-Les modules 00 à 06 ont été retravaillés une première fois (plus d'explications, de schémas et de démos). Les modules 07 à 17 sont dans leur première version.
+Tous les modules ont été retravaillés pour avancer pas à pas, avec des schémas, une quarantaine de démos interactives, des aides à la décision, des exercices corrigés et un encadré « En bref » par module.
 
 ## Organisation du dépôt
 
 ```
 index.html        la page complète, générée : c'est elle qu'on ouvre
-src/              les sources, découpées par groupe de modules
-  00_styles.html                          titre, polices et feuille de style
+src/              les sources, un fichier par module ou groupe de modules
+  00_styles.html                              titre, polices et feuille de style
   10_m00-m01_declaratif-javascript.html
   20_m02-m05_projet-jsx-props-usestate.html
   30_m06_evenements-listes-formulaires.html
-  31_m07-m08_rendu-useeffect.html
-  40_m09-m11_hooks-context-custom-hooks.html
-  50_m12-m14_suspense-erreurs-debug.html
-  60_m15-m17_pratique-ia-antiseche.html
-  90_script_page.html                     quiz, progression, sommaire, copier le code
-  91_script_demos.html                    les démos interactives
+  31_m07_cycle-de-rendu.html
+  32_m08_useeffect.html
+  40_m09_regles-autres-hooks.html
+  41_m10_context.html
+  42_m11_custom-hooks.html
+  50_m12_suspense-lazy.html
+  51_m13_error-boundaries.html
+  52_m14_debugger.html
+  60_m15_lire-un-projet.html
+  61_m16_ia.html
+  62_m17_antiseche.html
+  90_script_page.html                         quiz, progression, sommaire, copier le code
+  91_script_demos.html                        les démos des modules 00 à 06
+  92_script_demos_m07-m17.html                les démos des modules 07 à 17
 tools/build.py    assemble src/ en index.html
 ```
 
@@ -73,3 +81,7 @@ Le contenu suit la documentation officielle de React (version 19.3 du 9 septembr
 - [React Compiler v1.0](https://react.dev/blog/2025/10/07/react-compiler-1)
 - [Sunsetting Create React App](https://react.dev/blog/2025/02/14/sunsetting-create-react-app)
 - [Component (error boundaries)](https://react.dev/reference/react/Component)
+- [Keeping Components Pure](https://react.dev/learn/keeping-components-pure)
+- [Preserving and Resetting State](https://react.dev/learn/preserving-and-resetting-state)
+- [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect)
+- [Reusing Logic with Custom Hooks](https://react.dev/learn/reusing-logic-with-custom-hooks)

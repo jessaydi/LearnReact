@@ -1,0 +1,236 @@
+
+<!-- ===================================================== 13 -->
+<section class="module" id="m13" data-short="Error boundaries">
+<header class="module-head"><span class="module-num">13</span><div><p class="module-kicker">Résilience</p><h2>Error boundaries : contenir les erreurs</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Voir ce qui arrive à l'écran quand un composant plante, avec et sans error boundary.</li>
+  <li>Lire la version classe, et utiliser la bibliothèque <code>react-error-boundary</code>.</li>
+  <li>Savoir quelles erreurs sont capturées, lesquelles ne le sont pas, et pourquoi.</li>
+  <li>Placer ses boundaries, et les combiner avec Suspense.</li>
+</ul></div>
+
+<h3>Le problème : une erreur, une page blanche</h3>
+<p>Par défaut, si un composant lève une erreur pendant son rendu, React retire <strong>toute</strong> l'interface de l'écran. Pourquoi si radical ? Parce qu'une interface à moitié cassée peut être pire qu'aucune : afficher un mauvais montant sur une page de paiement, par exemple. React préfère ne rien afficher que d'afficher quelque chose de faux.</p>
+<p>Une <strong>error boundary</strong> permet de choisir une réaction plus fine : elle capture les erreurs de son sous-arbre et affiche un contenu de secours à la place de la partie cassée. Le reste de la page continue de fonctionner. Fais planter le graphique dans chaque configuration :</p>
+
+<div class="demo" id="demo-crash">
+  <div class="demo-head"><span>Démo · un widget qui plante</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Placement des error boundaries">
+      <button type="button" role="radio" aria-checked="true" data-mode="none">Aucune boundary</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="global">Une boundary globale</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="widget">Une boundary par widget</button>
+    </div>
+    <figure class="code compact"><figcaption>Dashboard.jsx</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-actions"><button type="button" class="btn" data-act="crash">Faire planter StatsChart</button></div>
+    <div class="dash" data-out="dash"></div>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite"></p>
+  </div>
+</div>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Le tableau électrique d'un appartement. Sans disjoncteur, un court-circuit dans la cuisine coupe tout l'immeuble. Un seul disjoncteur général coupe tout l'appartement. Un disjoncteur par pièce ne coupe que la cuisine. C'est toi qui décides où poser les disjoncteurs.</p>
+</aside>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>C'est un <code>try/except</code> autour d'un sous-arbre de l'interface, ou le gestionnaire d'exceptions global de FastAPI ou d'ASP.NET. À la différence près qu'on peut en placer plusieurs, à différents niveaux de l'écran.</p>
+</aside>
+
+<h3>La version classe, à savoir lire</h3>
+<p>Il n'existe toujours pas de hook pour écrire une error boundary : la documentation de React indique qu'il faut une classe. C'est le seul cas où tu en rencontreras sans doute encore dans du code récent. Lis-la ligne par ligne :</p>
+<figure class="code"><figcaption>ErrorBoundary.jsx</figcaption><pre><code class="language-jsx">import { Component } from "react";
+
+class ErrorBoundary extends Component {
+  state = { error: null };                     // 1. pas d'erreur au départ
+
+  // 2. Un descendant a levé une erreur pendant son rendu :
+  //    React appelle cette méthode, qui passe la boundary en mode « secours »
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  // 3. Juste après : l'endroit pour journaliser (Sentry, console, ton API de logs…)
+  componentDidCatch(error, info) {
+    console.error("Erreur capturée :", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return this.props.fallback ?? <p>Une erreur est survenue.</p>;  // 4. le contenu de secours
+    }
+    return this.props.children;                // 5. sinon, les enfants normalement
+  }
+}
+
+// Usage
+<ErrorBoundary fallback={<p>Impossible d'afficher le profil.</p>}>
+  <Profile />
+</ErrorBoundary></code></pre></figure>
+
+<h3>En pratique : react-error-boundary</h3>
+<p>La documentation officielle suggère aussi la bibliothèque <code>react-error-boundary</code>, qui fournit ce composant tout fait, avec un bouton « Réessayer » et un hook pour les erreurs asynchrones.</p>
+<figure class="code"><figcaption>terminal</figcaption><pre><code class="language-bash">npm install react-error-boundary</code></pre></figure>
+<figure class="code"><figcaption>UserPage.jsx</figcaption><pre><code class="language-jsx">import { ErrorBoundary } from "react-error-boundary";
+
+// Le contenu de secours reçoit l'erreur et une fonction pour réessayer
+function ErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <div role="alert">
+      <p>Ce bloc n'a pas pu s'afficher.</p>
+      <pre>{error.message}</pre>
+      <button onClick={resetErrorBoundary}>Réessayer</button>
+    </div>
+  );
+}
+
+function UserPage({ userId }) {
+  return (
+    <ErrorBoundary
+      FallbackComponent={ErrorFallback}
+      resetKeys={[userId]}                             // si userId change, on réessaie automatiquement
+      onError={(error, info) => logError(error, info)} // pour la journalisation
+    >
+      <UserProfile userId={userId} />
+    </ErrorBoundary>
+  );
+}</code></pre></figure>
+<p>« Réessayer » remonte le sous-arbre de zéro : ses états repartent de leurs valeurs initiales, et un composant qui avait planté à cause d'une donnée passagère a une nouvelle chance.</p>
+
+<h3>Ce qui est capturé, et ce qui ne l'est pas</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Capturé</th><th>Pas capturé</th></tr></thead>
+<tbody>
+<tr><td>Erreurs levées pendant le rendu d'un descendant</td><td>Erreurs dans les gestionnaires d'événements (<code>onClick</code>…)</td></tr>
+<tr><td>Erreurs dans les effets et les méthodes de cycle de vie</td><td>Code asynchrone hors de React (<code>setTimeout</code>, promesse dans un gestionnaire)</td></tr>
+<tr><td>Promesse rejetée lue avec <code>use()</code></td><td>Erreurs de la boundary elle-même</td></tr>
+<tr><td>Erreurs dans une fonction passée à <code>startTransition</code></td><td>Rendu côté serveur</td></tr>
+</tbody></table></div>
+<p>Pourquoi les gestionnaires d'événements ne sont-ils pas capturés ? Repense au cycle du module 07. Une boundary agit <strong>pendant le rendu</strong> : React est en train de construire l'arbre, il voit qu'une branche a échoué et la remplace par le fallback. Un clic, lui, arrive plus tard, en dehors de tout rendu. L'écran est déjà affiché et rien n'est cassé : React n'a pas de branche à remplacer.</p>
+<p>Pour une erreur d'action, tu as deux options :</p>
+<figure class="code"><figcaption>DeleteButton.jsx</figcaption><pre><code class="language-jsx">import { useErrorBoundary } from "react-error-boundary";
+
+function DeleteButton({ taskId }) {
+  const { showBoundary } = useErrorBoundary();
+  const [error, setError] = useState(null);
+
+  async function handleDelete() {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      // Option A : un message local, souvent la meilleure expérience pour une action
+      setError(err);
+      // Option B : confier l'erreur à la boundary la plus proche
+      // showBoundary(err);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={handleDelete}>Supprimer</button>
+      {error && <p role="alert">Suppression impossible : {error.message}</p>}
+    </>
+  );
+}</code></pre></figure>
+<p>L'option A est presque toujours la bonne pour une action : la tâche n'a pas été supprimée, mais la liste reste utilisable. L'option B convient quand l'échec rend la zone entière inutilisable.</p>
+
+<h3>Où placer ses boundaries</h3>
+<div class="eb" aria-label="Exemple de placement des error boundaries">
+  <span class="eb-tag">Boundary globale · « Oups, recharge la page »</span>
+  <div class="zone">Header<span>pas de boundary dédiée : il est simple et critique</span></div>
+  <div class="eb">
+    <span class="eb-tag">Boundary par page</span>
+    <div class="eb-row">
+      <div class="eb"><span class="eb-tag">Widget</span><div class="zone">StatsChart<span>bibliothèque tierce, peut planter</span></div></div>
+      <div class="eb"><span class="eb-tag">Widget</span><div class="zone">TaskList<span>données venues de l'API</span></div></div>
+    </div>
+  </div>
+</div>
+<p>Une boundary au sommet pour ne jamais laisser une page blanche, puis une autour de chaque zone qui a du sens pour l'utilisateur : une page, un widget, un panneau. Pas autour de chaque bouton ou de chaque avatar : un message d'erreur doit remplacer quelque chose que l'utilisateur reconnaît comme un bloc.</p>
+
+<h3>Le trio chargement, erreur, succès</h3>
+<p>Avec Suspense (module 12) et une error boundary, les trois états d'un composant qui charge des données sont déclarés <strong>autour</strong> de lui :</p>
+<figure class="code"><figcaption>ProfileSection.jsx</figcaption><pre><code class="language-jsx"><ErrorBoundary FallbackComponent={ErrorFallback}>   {/* l'erreur */}
+  <Suspense fallback={<Spinner />}>                  {/* le chargement */}
+    <UserProfile userId={userId} />                  {/* le succès, et seulement lui */}
+  </Suspense>
+</ErrorBoundary></code></pre></figure>
+<div class="trio" aria-label="Qui gère quel état">
+  <div class="trio-box trio-load"><b>Chargement</b><span>Suspense affiche le fallback</span></div>
+  <div class="trio-box trio-err"><b>Erreur</b><span>l'error boundary affiche son contenu de secours</span></div>
+  <div class="trio-box trio-ok"><b>Succès</b><span>le composant ne gère plus que ce cas</span></div>
+</div>
+<p>Tu retrouveras exactement ce motif avec <code>useSuspenseQuery</code> de React Query.</p>
+<p>Pour le suivi en production, React 19 permet aussi de déclarer des fonctions de rapport à la création de la racine :</p>
+<figure class="code"><figcaption>main.jsx</figcaption><pre><code class="language-jsx">createRoot(document.getElementById("root"), {
+  onCaughtError: (error, info) => report(error, info.componentStack),   // capturées par une boundary
+  onUncaughtError: (error, info) => report(error, info.componentStack), // non capturées
+}).render(<App />);</code></pre></figure>
+<aside class="note key"><p class="label">À retenir</p>
+<p>En développement, une erreur capturée apparaît quand même dans la console, en rouge. C'est normal : la boundary a fait son travail, React te prévient seulement qu'une erreur a eu lieu.</p>
+</aside>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Sans error boundary, une erreur de rendu retire toute l'interface. Une boundary remplace seulement la partie cassée.</li>
+<li>Les boundaries s'écrivent en classe ; en pratique, on utilise <code>react-error-boundary</code>, avec « Réessayer » et <code>resetKeys</code>.</li>
+<li>Elles capturent les erreurs du rendu, des effets et de <code>use()</code>, pas celles des gestionnaires d'événements : celles-là se traitent avec <code>try/catch</code>.</li>
+<li>Une boundary globale, puis une par zone qui a du sens. Avec Suspense, chargement et erreur sont déclarés autour du composant.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice</p>
+<p>Écris un compteur <code>BuggyCounter</code> qui lève une erreur quand il atteint 3. Affiche-en deux, chacun dans sa propre boundary, et vérifie que le second continue de fonctionner quand le premier plante. Le bouton « Réessayer » doit remettre le compteur à zéro.</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>App.jsx</figcaption><pre><code class="language-jsx">import { useState } from "react";
+import { ErrorBoundary } from "react-error-boundary";
+
+function BuggyCounter() {
+  const [count, setCount] = useState(0);
+  if (count === 3) {
+    throw new Error("Le compteur a planté à 3 !"); // levée PENDANT le rendu → capturée
+  }
+  return <button onClick={() => setCount(c => c + 1)}>Compteur : {count}</button>;
+}
+
+function ErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <p role="alert">
+      {error.message} <button onClick={resetErrorBoundary}>Réessayer</button>
+    </p>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <BuggyCounter />
+      </ErrorBoundary>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <BuggyCounter />  {/* indépendant : continue de marcher si l'autre plante */}
+      </ErrorBoundary>
+    </>
+  );
+}</code></pre></figure>
+<p>Remarque : l'erreur est levée au rendu qui suit le 3<sup>e</sup> clic, pas dans le gestionnaire. C'est pour ça que la boundary la capture. « Réessayer » remonte <code>BuggyCounter</code> de zéro : son état repart à 0.</p>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Une erreur est levée dans un <code>onClick</code>. L'error boundary au-dessus l'attrape-t-elle ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Oui, comme toutes les erreurs du sous-arbre.</button>
+    <button type="button" data-k="b">Non : il faut la gérer avec un <code>try/catch</code> (et éventuellement <code>showBoundary</code>).</button>
+    <button type="button" data-k="c">Seulement en développement.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Les boundaries agissent pendant le rendu. Un gestionnaire d'événement s'exécute plus tard, hors du rendu : gère ses erreurs toi-même, ou transmets-les avec <code>showBoundary</code>.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Le graphique d'un tableau de bord utilise une bibliothèque qui plante parfois. Où places-tu une boundary ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Aucune : il faut corriger la bibliothèque.</button>
+    <button type="button" data-k="b">Seulement autour de toute l'application.</button>
+    <button type="button" data-k="c">Autour du graphique, en plus de la boundary globale.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Une boundary autour du widget fragile limite les dégâts à ce widget : le reste du tableau de bord reste utilisable. La boundary globale reste le filet de sécurité pour tout le reste.</p>
+</div>
+</section><!--/m13-->

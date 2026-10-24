@@ -1,0 +1,151 @@
+
+<!-- ===================================================== 17 -->
+<section class="module" id="m17" data-short="Antisèche et suite">
+<header class="module-head"><span class="module-num">17</span><div><p class="module-kicker">Pour garder sous la main</p><h2>Antisèche et suite du parcours</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Voir d'un coup d'œil comment les notions du cours s'articulent.</li>
+  <li>Retrouver vite un hook, un geste ou un mot de vocabulaire.</li>
+  <li>Savoir quoi apprendre ensuite, et sur quel projet t'entraîner.</li>
+</ul></div>
+
+<h3>La carte du cours</h3>
+<p>Tout part de la formule du début : <strong>UI = f(état)</strong>. Chaque notion du cours répond à une question précise autour de cette formule. Clique sur une carte pour revoir le module correspondant.</p>
+<div class="cmap" aria-label="Carte des notions du cours">
+  <a class="cm cm-core" href="#m00"><span class="cm-q">L'idée</span><b>UI = f(état)</b><span>tu modifies les données, React met l'écran à jour</span><small>00</small></a>
+  <a class="cm" href="#m03"><span class="cm-q">Décrire l'écran</span><b>Composants, JSX, props</b><span>des fonctions qui renvoient l'interface, des paramètres en lecture seule</span><small>03 · 04</small></a>
+  <a class="cm" href="#m05"><span class="cm-q">Mémoriser</span><b>useState, useReducer, useRef</b><span>l'état qui met l'écran à jour, la ref qui ne le fait pas</span><small>05 · 09</small></a>
+  <a class="cm" href="#m07"><span class="cm-q">Mettre à jour</span><b>Rendu, commit, keys</b><span>qui se re-rend, la pureté, où vit l'état, quand il survit</span><small>06 · 07</small></a>
+  <a class="cm" href="#m08"><span class="cm-q">Parler à l'extérieur</span><b>useEffect</b><span>mise en place, nettoyage, dépendances, données</span><small>08</small></a>
+  <a class="cm" href="#m10"><span class="cm-q">Partager</span><b>Context, custom hooks</b><span>une valeur pour un sous-arbre, une logique pour plusieurs composants</span><small>10 · 11</small></a>
+  <a class="cm" href="#m12"><span class="cm-q">Attendre et échouer</span><b>Suspense, error boundaries</b><span>chargement et erreurs déclarés autour des composants</span><small>12 · 13</small></a>
+  <a class="cm" href="#m14"><span class="cm-q">Travailler</span><b>Débugger, lire, piloter l'IA</b><span>remonter la piste d'une valeur, petits pas, relecture</span><small>14 · 15 · 16</small></a>
+</div>
+
+<h3>Les hooks en un tableau</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Hook</th><th>Rôle</th><th>Forme</th><th>Piège n°1</th></tr></thead>
+<tbody>
+<tr><td><code>useState</code></td><td>Mémoire qui met l'écran à jour</td><td><code>const [v, setV] = useState(init)</code></td><td>Modifier un objet sur place</td></tr>
+<tr><td><code>useEffect</code></td><td>Synchroniser avec l'extérieur</td><td><code>useEffect(() => { …; return cleanup }, [deps])</code></td><td>L'utiliser pour une valeur dérivée</td></tr>
+<tr><td><code>useContext</code></td><td>Lire une valeur partagée</td><td><code>const v = useContext(MyContext)</code></td><td>Provider oublié : valeur par défaut silencieuse</td></tr>
+<tr><td><code>useRef</code></td><td>DOM ou valeur sans re-rendu</td><td><code>const ref = useRef(null)</code></td><td>Lire <code>ref.current</code> pendant le rendu</td></tr>
+<tr><td><code>useReducer</code></td><td>État avec logique riche</td><td><code>const [s, dispatch] = useReducer(fn, init)</code></td><td>Muter l'état dans le reducer</td></tr>
+<tr><td><code>useMemo</code> / <code>useCallback</code></td><td>Mémoïser un calcul / une fonction</td><td><code>useMemo(() => calc, [deps])</code></td><td>En mettre partout sans mesurer</td></tr>
+<tr><td><code>use</code></td><td>Lire une promesse ou un contexte</td><td><code>const data = use(promise)</code></td><td>Promesse recréée à chaque rendu</td></tr>
+<tr><td><code>useId</code></td><td>Identifiant unique stable</td><td><code>const id = useId()</code></td><td>S'en servir comme <code>key</code> de liste</td></tr>
+</tbody></table></div>
+
+<h3>Les gestes du quotidien</h3>
+<figure class="code"><figcaption>antisèche.jsx</figcaption><pre><code class="language-jsx">// --- Mettre à jour l'état sans le modifier
+setUser(u => ({ ...u, name: "Grace" }));                     // modifier un champ
+setItems(xs => [...xs, item]);                               // ajouter
+setItems(xs => xs.filter(x => x.id !== id));                 // supprimer
+setItems(xs => xs.map(x => (x.id === id ? { ...x, done: !x.done } : x))); // modifier un élément
+setOpen(o => !o);                                            // basculer
+
+// --- Valeur dérivée : pas d'état, pas d'effet
+const visible = items.filter(x => x.title.includes(query));
+
+// --- Affichage conditionnel et liste
+{isLoading ? <Spinner /> : <List />}
+{items.length > 0 && <Count n={items.length} />}
+{items.map(x => <Row key={x.id} item={x} />)}
+
+// --- Effet avec nettoyage
+useEffect(() => {
+  const id = setInterval(tick, 1000);
+  return () => clearInterval(id);
+}, []);
+
+// --- Chargement sans réponse périmée
+useEffect(() => {
+  let ignore = false;
+  fetchUser(userId).then(u => { if (!ignore) setUser(u); });
+  return () => { ignore = true; };
+}, [userId]);
+
+// --- Contexte + hook garde-fou
+const Ctx = createContext(null);
+export function useThing() {
+  const v = useContext(Ctx);
+  if (v === null) throw new Error("useThing hors de son Provider");
+  return v;
+}
+
+// --- Chargement + erreur déclaratifs
+<ErrorBoundary FallbackComponent={ErrorFallback}>
+  <Suspense fallback={<Spinner />}>
+    <Profile />
+  </Suspense>
+</ErrorBoundary></code></pre></figure>
+
+<h3>Petit glossaire</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Français</th><th>Anglais (ce que tu liras dans la doc)</th></tr></thead>
+<tbody>
+<tr><td>rendu, re-rendu</td><td>render, re-render</td></tr>
+<tr><td>montage, démontage</td><td>mount, unmount</td></tr>
+<tr><td>état, valeur dérivée</td><td>state, derived state</td></tr>
+<tr><td>remonter l'état</td><td>lifting state up</td></tr>
+<tr><td>fournisseur, consommateur</td><td>provider, consumer</td></tr>
+<tr><td>tableau de dépendances, nettoyage</td><td>dependency array, cleanup</td></tr>
+<tr><td>contenu de secours</td><td>fallback</td></tr>
+<tr><td>champ contrôlé</td><td>controlled input</td></tr>
+<tr><td>closure périmée</td><td>stale closure</td></tr>
+<tr><td>découpage du code</td><td>code splitting</td></tr>
+<tr><td>faire traverser des props</td><td>prop drilling</td></tr>
+<tr><td>mémoïsation</td><td>memoization</td></tr>
+</tbody></table></div>
+
+<h3>La suite du parcours</h3>
+<ol class="steps three">
+  <li><b>Un projet fil rouge</b><span>TaskFlow : une app de tâches qui mobilise chaque module de ce cours (détails ci-dessous).</span></li>
+  <li><b>TypeScript</b><span>typer props, état et événements. Tes réflexes de C# t'y aideront beaucoup.</span></li>
+  <li><b>React Query</b><span>les données serveur : cache, rafraîchissement, mutations. Il remplacera tes <code>fetch</code> dans des effets.</span></li>
+  <li><b>Le routage</b><span>React Router ou TanStack Router : pages, paramètres d'URL, navigation.</span></li>
+  <li><b>Formulaires et tests</b><span>react-hook-form + zod, puis Vitest et Testing Library.</span></li>
+  <li><b>Un framework</b><span>Next.js ou React Router en mode framework : rendu serveur et Server Components.</span></li>
+</ol>
+
+<h4>Le projet TaskFlow, étape par étape</h4>
+<p>Construis-le dans ton bac à sable Vite, et branche-le sur une petite API FastAPI ou ASP.NET que tu écris toi-même. Tu verras les deux côtés du contrat. Avance dans l'ordre : chaque étape s'appuie sur la précédente.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Étape</th><th>Fonctionnalité</th><th>Modules</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Liste de tâches en dur, découpée en <code>Header</code>, <code>TaskList</code>, <code>TaskItem</code></td><td>03, 04</td></tr>
+<tr><td>2</td><td>Ajout, case à cocher, suppression, compteur des restantes</td><td>05, 06</td></tr>
+<tr><td>3</td><td>Recherche et filtre « masquer terminées », état placé au bon endroit</td><td>06, 07</td></tr>
+<tr><td>4</td><td>Chargement et enregistrement via ton API, avec gestion des erreurs</td><td>08</td></tr>
+<tr><td>5</td><td>Logique des tâches extraite dans un <code>useTasks</code>, préférences dans <code>useLocalStorage</code></td><td>09, 11</td></tr>
+<tr><td>6</td><td>Thème clair / sombre et utilisateur connecté via contextes</td><td>10</td></tr>
+<tr><td>7</td><td>Page de statistiques chargée avec <code>lazy</code>, une error boundary par widget</td><td>12, 13</td></tr>
+<tr><td>8</td><td>Une séance de débogage volontaire : casse quelque chose, retrouve-le avec les DevTools</td><td>14</td></tr>
+</tbody></table></div>
+
+<h3>Ressources officielles</h3>
+<ul>
+<li><a href="https://react.dev/learn" target="_blank" rel="noopener">react.dev/learn</a> : le tutoriel officiel. Lis en priorité « Thinking in React » et la section « Escape Hatches ».</li>
+<li><a href="https://react.dev/learn/keeping-components-pure" target="_blank" rel="noopener">Keeping Components Pure</a> : la pureté, complément du module 07.</li>
+<li><a href="https://react.dev/learn/preserving-and-resetting-state" target="_blank" rel="noopener">Preserving and Resetting State</a> : quand l'état survit, complément du module 07.</li>
+<li><a href="https://react.dev/learn/you-might-not-need-an-effect" target="_blank" rel="noopener">You Might Not Need an Effect</a> : les effets inutiles, complément du module 08.</li>
+<li><a href="https://react.dev/learn/reusing-logic-with-custom-hooks" target="_blank" rel="noopener">Reusing Logic with Custom Hooks</a> : complément du module 11.</li>
+<li><a href="https://react.dev/reference/react" target="_blank" rel="noopener">react.dev/reference</a> : la référence de chaque hook et composant.</li>
+<li><a href="https://github.com/bvaughn/react-error-boundary" target="_blank" rel="noopener">react-error-boundary</a> : la bibliothèque du module 13.</li>
+</ul>
+
+<h3>Sources utilisées pour ce cours</h3>
+<ul class="sources">
+<li><a href="https://react.dev/versions" target="_blank" rel="noopener">React Versions</a> · react.dev (version 19.3 du 9 septembre 2026)</li>
+<li><a href="https://react.dev/blog/2026/09/09/react-19-3" target="_blank" rel="noopener">React 19.3</a> · blog React</li>
+<li><a href="https://react.dev/blog/2025/10/07/react-compiler-1" target="_blank" rel="noopener">React Compiler v1.0</a> · blog React</li>
+<li><a href="https://react.dev/blog/2025/02/14/sunsetting-create-react-app" target="_blank" rel="noopener">Sunsetting Create React App</a> · blog React</li>
+<li><a href="https://react.dev/reference/react/Component" target="_blank" rel="noopener">Component (error boundaries)</a> · référence React</li>
+</ul>
+</section><!--/m17-->
+
+<footer class="foot">
+  <p>Cours rédigé en octobre 2026, à jour pour React 19.3. Ta progression (modules marqués comme lus) est enregistrée dans ce navigateur uniquement.</p>
+</footer>
+
+</main>
+</div>

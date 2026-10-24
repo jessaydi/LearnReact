@@ -1,0 +1,383 @@
+
+<!-- ===================================================== 08 -->
+<section class="module" id="m08" data-short="useEffect">
+<header class="module-head"><span class="module-num">08</span><div><p class="module-kicker">Hooks · l'extérieur</p><h2>useEffect : se synchroniser avec l'extérieur</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Comprendre à quoi sert un effet, et ce qui le distingue d'un gestionnaire d'événement.</li>
+  <li>Savoir quand un effet s'exécute, selon son tableau de dépendances.</li>
+  <li>Écrire un nettoyage pour chaque ressource ouverte, et comprendre pourquoi StrictMode lance l'effet deux fois.</li>
+  <li>Charger des données sans afficher une réponse périmée.</li>
+  <li>Reconnaître les effets inutiles, de loin l'erreur la plus fréquente.</li>
+</ul></div>
+
+<h3>Le problème : faire quelque chose parce qu'on est affiché</h3>
+<p>Jusqu'ici, notre code se rangeait dans deux cases :</p>
+<ul>
+<li><strong>le rendu</strong> : calculer le JSX à partir des props et de l'état. Il doit rester pur (module 07) ;</li>
+<li><strong>les gestionnaires d'événements</strong> : réagir à une action précise de l'utilisateur (un clic, un envoi).</li>
+</ul>
+<p>Certains besoins ne rentrent dans aucune des deux. Le salon de discussion doit se connecter au serveur <strong>dès qu'il est affiché</strong>, pas quand on clique. Le titre de l'onglet doit afficher le nombre de messages non lus <strong>tant que</strong> la page est ouverte. Un minuteur doit tourner <strong>pendant que</strong> le chronomètre est à l'écran.</p>
+<p>Ces besoins ont un point commun : ils concernent un système <strong>extérieur à React</strong> (le réseau, le navigateur, un minuteur, un widget tiers) qu'il faut garder d'accord avec ce qui est affiché. C'est le rôle d'un <strong>effet</strong>.</p>
+<aside class="note analogy"><p class="label">Analogie</p>
+<p>Une chambre d'hôtel. Quand tu entres, tu allumes la lumière. Quand tu pars, tu l'éteins. Si tu changes de chambre, tu éteins l'ancienne avant d'allumer la nouvelle. Un effet suit exactement ces trois temps : une <strong>mise en place</strong>, un <strong>nettoyage</strong>, et on <strong>recommence</strong> quand la « chambre » (une dépendance) change.</p>
+</aside>
+
+<h3>Anatomie d'un effet</h3>
+<figure class="code"><figcaption>ChatRoom.jsx</figcaption><pre><code class="language-jsx">import { useEffect } from "react";
+
+function ChatRoom({ roomId }) {
+  useEffect(() => {
+    // 1. Mise en place : s'exécute APRÈS l'affichage
+    const connection = createConnection(roomId);
+    connection.connect();
+
+    // 2. Nettoyage : React l'appellera avant la prochaine mise en place, et au démontage
+    return () => connection.disconnect();
+  }, [roomId]); // 3. Dépendances : refaire 1 et 2 seulement si roomId a changé
+
+  return <h1>Salon {roomId}</h1>;
+}</code></pre></figure>
+<p>Lis cet effet comme une phrase : « tant que ce composant est affiché avec ce <code>roomId</code>, il doit y avoir une connexion à ce salon ». Tu décris l'état dans lequel doit être l'extérieur, et React s'occupe de connecter et déconnecter au bon moment.</p>
+
+<h3>Quand l'effet s'exécute-t-il ?</h3>
+<p>Un effet ne s'exécute jamais pendant le rendu. Il passe en dernier, une fois l'écran à jour :</p>
+<ol class="steps">
+  <li><b>Rendu</b><span>React appelle <code>ChatRoom</code>, qui renvoie son JSX. <code>useEffect</code> ne fait qu'enregistrer la fonction pour plus tard.</span></li>
+  <li><b>Commit</b><span>React met le DOM à jour : le titre « Salon général » existe.</span></li>
+  <li><b>Peinture</b><span>le navigateur affiche l'écran. L'utilisateur voit déjà le salon.</span></li>
+  <li><b>Effet</b><span>React exécute ta fonction : la connexion s'ouvre.</span></li>
+</ol>
+<p>Sur toute la vie du composant, voici ce que fait React avec l'effet du salon :</p>
+<div class="life" aria-label="Chronologie de l'effet du salon de discussion">
+  <div class="life-row"><p class="life-when">Montage<br><small>roomId = « général »</small></p><div class="life-evs"><span class="ev ev-render">rendu</span><span class="ev ev-effect">effet : connexion à « général »</span></div></div>
+  <div class="life-row"><p class="life-when">Re-rendu<br><small>autre état modifié, roomId identique</small></p><div class="life-evs"><span class="ev ev-render">rendu</span><span class="ev ev-skip">effet ignoré : dépendances identiques</span></div></div>
+  <div class="life-row"><p class="life-when">Re-rendu<br><small>roomId devient « aide »</small></p><div class="life-evs"><span class="ev ev-render">rendu</span><span class="ev ev-clean">nettoyage : déconnexion de « général »</span><span class="ev ev-effect">effet : connexion à « aide »</span></div></div>
+  <div class="life-row"><p class="life-when">Démontage<br><small>le salon disparaît de l'écran</small></p><div class="life-evs"><span class="ev ev-clean">nettoyage : déconnexion de « aide »</span></div></div>
+</div>
+<p>Remarque que le nettoyage utilise toujours les valeurs de <strong>son</strong> rendu (la photo du module 07) : il déconnecte « général », pas « aide ».</p>
+
+<h3>Le tableau de dépendances</h3>
+<p>Le second argument de <code>useEffect</code> dit à React <strong>quand</strong> refaire l'effet. Il y a trois formes :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Écriture</th><th>L'effet s'exécute…</th><th>Usage</th></tr></thead>
+<tbody>
+<tr><td><code>useEffect(fn)</code></td><td>après <strong>chaque</strong> rendu</td><td>rare ; souvent un oubli</td></tr>
+<tr><td><code>useEffect(fn, [])</code></td><td>après le <strong>premier</strong> rendu seulement (le montage)</td><td>abonnement global, initialisation unique</td></tr>
+<tr><td><code>useEffect(fn, [a, b])</code></td><td>après le premier rendu, puis chaque fois que <code>a</code> ou <code>b</code> a changé</td><td>le cas normal</td></tr>
+</tbody></table></div>
+<p>Après chaque rendu, React compare chaque dépendance à sa valeur du rendu précédent, avec <code>Object.is</code>, comme pour l'état. Si toutes sont identiques, l'effet est ignoré. Choisis un mode, puis provoque des rendus et regarde le journal :</p>
+
+<div class="demo" id="demo-effect">
+  <div class="demo-head"><span>Démo · quand l'effet s'exécute-t-il ?</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Tableau de dépendances">
+      <button type="button" role="radio" aria-checked="false" data-mode="none">Pas de tableau</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="empty">[ ]</button>
+      <button type="button" role="radio" aria-checked="true" data-mode="deps">[userId]</button>
+    </div>
+    <label class="pp-check"><input id="eff-strict" type="checkbox"> StrictMode (développement)</label>
+    <figure class="code compact"><figcaption>Presence.jsx</figcaption><pre><code class="language-jsx" data-out="effect-code">useEffect(() => {
+  const conn = connect(userId);
+  return () => conn.disconnect();
+}, [userId]);</code></pre></figure>
+    <div class="demo-actions">
+      <button type="button" class="btn" data-act="rerender">Re-rendu (autre état modifié)</button>
+      <button type="button" class="btn" data-act="change">Changer userId</button>
+      <button type="button" class="btn ghost" data-act="toggle">Démonter</button>
+    </div>
+    <p class="demo-status">userId = <strong data-out="uid">1</strong> · connecté à : <strong data-out="conn">utilisateur 1</strong></p>
+  </div>
+  <div class="log" data-out="log" aria-live="polite"></div>
+</div>
+<ul>
+<li><strong>Pas de tableau</strong> : déconnexion et reconnexion à chaque rendu, même quand rien d'utile n'a changé.</li>
+<li><strong><code>[]</code></strong> : l'effet ne tourne qu'au montage. Change <code>userId</code> : on reste connecté à l'ancien utilisateur. C'est un bug.</li>
+<li><strong><code>[userId]</code></strong> : l'effet ne se relance que lorsque <code>userId</code> change. C'est la bonne version.</li>
+</ul>
+<aside class="note key"><p class="label">À retenir · la règle des dépendances</p>
+<p>Toute valeur du composant utilisée dans l'effet (props, état, fonctions déclarées dans le composant) doit figurer dans le tableau. Tu ne choisis pas les dépendances : elles découlent du code de l'effet. La règle ESLint <code>react-hooks/exhaustive-deps</code> les vérifie pour toi.</p>
+</aside>
+
+<h3>Le nettoyage</h3>
+<p>Toute ressource ouverte dans un effet doit être refermée dans son nettoyage : connexion, abonnement, minuteur, écouteur d'événement. Sinon, les ressources s'accumulent à chaque changement : deux connexions ouvertes, deux minuteurs qui tournent, des écouteurs en double.</p>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>La fonction de nettoyage joue le rôle d'un bloc <code>with</code> (<code>__exit__</code>) ou d'un <code>finally</code> en Python, ou d'un <code>using</code> / <code>Dispose()</code> en C# : ce qui est ouvert doit être fermé, quoi qu'il arrive.</p>
+</aside>
+<figure class="code"><figcaption>trois effets et leur nettoyage</figcaption><pre><code class="language-jsx">// 1. Titre de l'onglet : rien à fermer, pas de nettoyage
+useEffect(() => {
+  document.title = `${unread} message(s) non lu(s)`;
+}, [unread]);
+
+// 2. Écouteur d'événement du navigateur : on retire ce qu'on a ajouté
+useEffect(() => {
+  function handleResize() {
+    setWidth(window.innerWidth);
+  }
+  window.addEventListener("resize", handleResize);
+  return () => window.removeEventListener("resize", handleResize);
+}, []);
+
+// 3. Minuteur : on arrête ce qu'on a démarré
+useEffect(() => {
+  const id = setInterval(() => setSeconds(s => s + 1), 1000);
+  return () => clearInterval(id);
+}, []);</code></pre></figure>
+
+<h3>StrictMode : pourquoi ton effet s'exécute deux fois</h3>
+<p>Coche « StrictMode » dans la démo ci-dessus et réinitialise. Au montage, tu vois : effet, nettoyage, effet. En développement, React monte le composant, le démonte aussitôt, puis le remonte. C'est un test automatique : si ton effet a un nettoyage correct, l'utilisateur ne voit aucune différence (on se retrouve avec une seule connexion). S'il en manque un, le bug apparaît tout de suite, en développement, plutôt que des semaines plus tard en production.</p>
+<aside class="note trap"><p class="label">Piège</p>
+<p>Ne désactive pas StrictMode pour « corriger » un effet lancé deux fois. Le double appel n'est pas le problème : il révèle un nettoyage manquant. En production, l'effet ne s'exécute qu'une fois au montage.</p>
+</aside>
+
+<h3>Charger des données, étape par étape</h3>
+<h4>Étape 1 · La version naïve</h4>
+<figure class="code"><figcaption>UserProfile.jsx · version naïve</figcaption><pre><code class="language-jsx">function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    fetchUser(userId).then(data => setUser(data));
+  }, [userId]);
+
+  if (!user) return <p>Chargement…</p>;
+  return <h2>{user.name}</h2>;
+}</code></pre></figure>
+<p>Elle semble marcher. Mais une requête réseau prend un temps variable, et les réponses n'arrivent pas forcément dans l'ordre des demandes.</p>
+
+<h4>Étape 2 · Le problème : une réponse périmée</h4>
+<p>Dans la démo, la réponse pour Ada met 2 secondes, celle pour Grace une demi-seconde. Clique sur Ada, puis tout de suite sur Grace, dans chaque mode :</p>
+
+<div class="demo" id="demo-race">
+  <div class="demo-head"><span>Démo · la course des requêtes</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="seg" role="radiogroup" aria-label="Version de l'effet">
+      <button type="button" role="radio" aria-checked="true" data-mode="naive">Sans protection</button>
+      <button type="button" role="radio" aria-checked="false" data-mode="ignore">Avec le drapeau ignore</button>
+    </div>
+    <figure class="code compact"><figcaption>l'effet de UserProfile</figcaption><pre><code class="language-jsx" data-out="code">// …</code></pre></figure>
+    <div class="demo-actions">
+      <button type="button" class="btn" data-user="ada">Voir Ada (réponse en 2 s)</button>
+      <button type="button" class="btn" data-user="grace">Voir Grace (réponse en 0,5 s)</button>
+    </div>
+    <p class="demo-status">Utilisateur demandé : <strong data-out="req">aucun</strong> · profil affiché : <strong data-out="shown">aucun</strong></p>
+    <p class="mem-verdict" data-out="verdict" aria-live="polite">Clique sur Ada, puis tout de suite sur Grace.</p>
+  </div>
+  <div class="log" data-out="log"></div>
+</div>
+<p>Sans protection, la réponse de Grace arrive en premier et s'affiche, puis celle d'Ada arrive et l'écrase. L'utilisateur a demandé Grace et voit Ada.</p>
+
+<h4>Étape 3 · La solution : le drapeau ignore</h4>
+<p>Chaque exécution de l'effet a son propre drapeau. Quand <code>userId</code> change, React appelle le nettoyage de l'ancien effet, qui lève le drapeau : « cette réponse ne nous intéresse plus ». Voici la version complète, avec le chargement et les erreurs :</p>
+<figure class="code"><figcaption>UserProfile.jsx · version robuste</figcaption><pre><code class="language-jsx">function UserProfile({ userId }) {
+  // On mémorise POUR QUEL userId on a reçu une réponse
+  const [result, setResult] = useState({ userId: null, user: null, error: null });
+
+  useEffect(() => {
+    let ignore = false;                                    // 1. le drapeau de CETTE exécution
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/users/${userId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`); // fetch ne lève rien sur un 404 / 500
+        const user = await res.json();
+        if (!ignore) setResult({ userId, user, error: null }); // 2. seulement si toujours d'actualité
+      } catch (error) {
+        if (!ignore) setResult({ userId, user: null, error });
+      }
+    }
+
+    load();                                                // la fonction d'effet ne peut pas être async
+    return () => { ignore = true; };                       // 3. userId change ? l'ancienne réponse sera ignorée
+  }, [userId]);
+
+  const isLoading = result.userId !== userId;              // une valeur dérivée, pas un état de plus
+
+  if (isLoading) return <p>Chargement…</p>;
+  if (result.error) return <p>Erreur : {result.error.message}</p>;
+  return <h2>{result.user.name}</h2>;
+}</code></pre></figure>
+<aside class="note key"><p class="label">À retenir</p>
+<p>C'est verbeux, et il manque encore le cache, les nouvelles tentatives et le rafraîchissement. C'est exactement ce que React Query fera pour toi. Comprendre ce code te permettra de comprendre ce que la bibliothèque automatise.</p>
+</aside>
+
+<h3>Les pièges classiques</h3>
+<h4>1. La boucle infinie</h4>
+<p>Un effet qui modifie l'état provoque un rendu. Si ce rendu relance l'effet, on tourne en rond :</p>
+<figure class="code"><figcaption>boucles.jsx</figcaption><pre><code class="language-jsx">// FAUX : pas de tableau → l'effet suit chaque rendu, et provoque un rendu, etc.
+useEffect(() => {
+  setCount(count + 1);
+});
+
+// FAUX aussi, plus sournois : options est un NOUVEL objet à chaque rendu,
+// donc la dépendance « change » toujours (comparaison par adresse, module 05)
+const options = { userId, includeArchived: false };
+useEffect(() => {
+  fetchTasks(options).then(setTasks);
+}, [options]);
+
+// JUSTE : dépendre de valeurs simples (chaînes, nombres, booléens)
+useEffect(() => {
+  fetchTasks({ userId, includeArchived: false }).then(setTasks);
+}, [userId]);</code></pre></figure>
+<p>Le symptôme : l'erreur <em>Maximum update depth exceeded</em>, ou une requête qui part en boucle dans l'onglet Réseau.</p>
+
+<h4>2. La closure périmée</h4>
+<p>Au module 07, on a vu qu'une fonction garde les valeurs de son rendu. Avec un minuteur lancé une seule fois, c'est un piège :</p>
+<figure class="code"><figcaption>Stopwatch.jsx</figcaption><pre><code class="language-jsx">useEffect(() => {
+  const id = setInterval(() => {
+    setSeconds(seconds + 1);   // seconds vient du 1er rendu : il vaut 0 pour toujours
+  }, 1000);
+  return () => clearInterval(id);
+}, []);                        // l'effet ne se relance jamais, la fonction garde sa vieille photo</code></pre></figure>
+
+<div class="demo" id="demo-stale">
+  <div class="demo-head"><span>Démo · la closure périmée</span><button type="button" class="btn ghost small" data-act="reset">Réinitialiser</button></div>
+  <div class="demo-body">
+    <div class="demo-split">
+      <div class="demo-col">
+        <p class="demo-title"><code>setSeconds(seconds + 1)</code></p>
+        <p class="big-num" data-out="a">0</p>
+        <p class="demo-hint" data-out="a-note">lit la valeur figée du premier rendu</p>
+      </div>
+      <div class="demo-col">
+        <p class="demo-title"><code>setSeconds(s => s + 1)</code></p>
+        <p class="big-num" data-out="b">0</p>
+        <p class="demo-hint">demande à React la valeur la plus récente</p>
+      </div>
+    </div>
+    <div class="demo-actions">
+      <button type="button" class="btn" data-act="start">Démarrer les deux minuteurs</button>
+      <button type="button" class="btn ghost" data-act="stop">Arrêter</button>
+    </div>
+  </div>
+</div>
+<p>À gauche, chaque seconde calcule <code>0 + 1</code> : le compteur reste bloqué à 1. À droite, la forme fonction reçoit toujours la valeur à jour. Quand un minuteur ou un abonnement met à jour l'état, utilise la forme fonction du setter.</p>
+
+<h4>3. L'effet qui ne devrait pas exister</h4>
+<p>C'est l'erreur la plus répandue, y compris dans le code généré par une IA : utiliser un effet pour quelque chose qui n'a rien d'extérieur.</p>
+<div class="compare">
+<figure class="code"><figcaption>Valeur dérivée <span class="tag bad">effet inutile</span></figcaption><pre><code class="language-jsx">const [fullName, setFullName] = useState("");
+
+useEffect(() => {
+  setFullName(`${first} ${last}`);
+}, [first, last]);
+// un rendu avec l'ancien nom, puis un second rendu</code></pre></figure>
+<figure class="code"><figcaption>Calcul pendant le rendu <span class="tag good">correct</span></figcaption><pre><code class="language-jsx">const fullName = `${first} ${last}`;
+// toujours juste, dès le premier rendu</code></pre></figure>
+</div>
+<div class="compare">
+<figure class="code"><figcaption>Action utilisateur <span class="tag bad">effet inutile</span></figcaption><pre><code class="language-jsx">const [submitted, setSubmitted] = useState(false);
+
+useEffect(() => {
+  if (submitted) postTask(form);
+}, [submitted, form]);</code></pre></figure>
+<figure class="code"><figcaption>Dans le gestionnaire <span class="tag good">correct</span></figcaption><pre><code class="language-jsx">async function handleSubmit(e) {
+  e.preventDefault();
+  await postTask(form);   // l'envoi est causé par le clic
+}</code></pre></figure>
+</div>
+
+<h4>4. L'effet async</h4>
+<p><code>useEffect(async () => …)</code> ne fonctionne pas : une fonction <code>async</code> renvoie une promesse, alors que React attend soit rien, soit une fonction de nettoyage. Déclare une fonction <code>async</code> <strong>à l'intérieur</strong> de l'effet et appelle-la, comme <code>load()</code> dans <code>UserProfile</code>.</p>
+
+<h3>As-tu vraiment besoin d'un effet ?</h3>
+<p>Réponds aux questions pour un besoin précis que tu as en tête :</p>
+<div class="decide" data-decide>
+  <p class="label">Aide à la décision</p>
+  <ol class="dq-trail" data-out="trail"></ol>
+  <div class="dq" data-node="start">
+    <p class="dq-q">Ce code doit-il s'exécuter parce que l'utilisateur a fait une action précise (un clic, un envoi, une frappe) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-handler">Oui</button><button type="button" class="btn ghost" data-go="q2">Non</button></div>
+  </div>
+  <div class="dq" data-node="q2" hidden>
+    <p class="dq-q">Veux-tu calculer une valeur à partir des props ou de l'état (un total, une liste filtrée, un nom complet) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-derive">Oui</button><button type="button" class="btn ghost" data-go="q3">Non</button></div>
+  </div>
+  <div class="dq" data-node="q3" hidden>
+    <p class="dq-q">Veux-tu remettre un état à zéro quand une prop change (changer d'utilisateur, de fiche) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-key">Oui</button><button type="button" class="btn ghost" data-go="q4">Non</button></div>
+  </div>
+  <div class="dq" data-node="q4" hidden>
+    <p class="dq-q">Dois-tu te connecter à quelque chose que React ne gère pas (API du navigateur, WebSocket, minuteur, widget tiers, titre de l'onglet) ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-effect">Oui</button><button type="button" class="btn ghost" data-go="q5">Non</button></div>
+  </div>
+  <div class="dq" data-node="q5" hidden>
+    <p class="dq-q">Dois-tu charger des données depuis ton API ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-fetch">Oui</button><button type="button" class="btn ghost" data-go="r-none">Non</button></div>
+  </div>
+  <div class="dq dr dr-no" data-node="r-handler" hidden><p class="dr-t">Pas d'effet : un gestionnaire d'événement</p><p>Mets le code dans <code>onClick</code> ou <code>onSubmit</code>. L'action est causée par l'utilisateur, pas par l'affichage.</p></div>
+  <div class="dq dr dr-no" data-node="r-derive" hidden><p class="dr-t">Pas d'effet : un calcul pendant le rendu</p><p>Écris <code>const total = items.reduce(…)</code> directement dans le composant. Pas d'état en plus, pas d'effet.</p></div>
+  <div class="dq dr dr-no" data-node="r-key" hidden><p class="dr-t">Pas d'effet : une key</p><p>Écris <code>&lt;Form key={userId} /&gt;</code>. Quand la key change, React recrée le composant avec un état neuf (module 07).</p></div>
+  <div class="dq dr dr-yes" data-node="r-effect" hidden><p class="dr-t">Oui, c'est un effet</p><p>Écris la mise en place, le nettoyage qui la défait, et laisse le linter compléter les dépendances.</p></div>
+  <div class="dq dr dr-yes" data-node="r-fetch" hidden><p class="dr-t">Un effet, ou mieux, une bibliothèque</p><p>Un effet avec le drapeau <code>ignore</code> fonctionne. Dans un vrai projet, préfère React Query ou le chargement de données du framework.</p></div>
+  <div class="dq dr dr-no" data-node="r-none" hidden><p class="dr-t">Probablement pas d'effet</p><p>Formule le besoin à voix haute : s'il ne parle ni d'un système extérieur ni de données à charger, il relève du rendu ou d'un gestionnaire.</p></div>
+  <button type="button" class="btn ghost small" data-act="restart">Recommencer</button>
+</div>
+
+<p>Deux noms à connaître sans t'y attarder : <code>useLayoutEffect</code> s'exécute avant que le navigateur peigne l'écran (rare, pour mesurer un élément) ; <code>useEffectEvent</code>, stable depuis React 19.2, permet de lire la dernière valeur d'une prop dans un effet sans la mettre dans les dépendances.</p>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Un effet synchronise le composant avec un système extérieur. Il s'exécute après l'affichage, jamais pendant le rendu.</li>
+<li>Les dépendances découlent du code de l'effet : toute valeur du composant qu'il utilise doit y figurer.</li>
+<li>Tout ce qui est ouvert est refermé dans le nettoyage. StrictMode le vérifie en lançant l'effet deux fois en développement.</li>
+<li>Pour charger des données, protège-toi des réponses périmées avec un drapeau <code>ignore</code>.</li>
+<li>Un calcul ou une réaction à un clic ne sont jamais des effets.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice</p>
+<p>Écris un composant <code>WindowWidth</code> qui affiche la largeur de la fenêtre et se met à jour quand on la redimensionne. Ajoute un composant <code>DocumentTitle</code> qui reçoit un compteur en prop et l'affiche dans le titre de l'onglet. Pense aux nettoyages et aux dépendances.</p>
+<details class="solution"><summary>Voir la solution</summary>
+<figure class="code"><figcaption>WindowWidth.jsx et DocumentTitle.jsx</figcaption><pre><code class="language-jsx">function WindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    function handleResize() {
+      setWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize); // nettoyage
+  }, []); // l'écouteur n'a besoin d'être posé qu'une fois
+
+  return <p>Largeur : {width}px</p>;
+}
+
+function DocumentTitle({ count }) {
+  useEffect(() => {
+    document.title = `(${count}) TaskFlow`;
+  }, [count]); // relancé quand count change
+
+  return null; // ce composant n'affiche rien
+}</code></pre></figure>
+<p>Au module 11, tu transformeras <code>WindowWidth</code> en custom hook réutilisable.</p>
+</details>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q">Avec <code>useEffect(fn, [])</code>, quand <code>fn</code> s'exécute-t-elle (en production) ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Après chaque rendu.</button>
+    <button type="button" data-k="b">Une seule fois, après le premier rendu ; son nettoyage au démontage.</button>
+    <button type="button" data-k="c">Avant le premier rendu.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Un tableau vide signifie « aucune dépendance ne peut changer ». L'effet tourne après le montage, son nettoyage au démontage. En développement, StrictMode ajoute un démontage et un remontage pour vérifier le nettoyage.</p>
+</div>
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Lequel de ces besoins justifie vraiment un <code>useEffect</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Calculer le total d'un panier à partir de ses lignes.</button>
+    <button type="button" data-k="b">Envoyer un formulaire quand on clique sur « Valider ».</button>
+    <button type="button" data-k="c">S'abonner aux messages d'un WebSocket tant que le composant est affiché.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Le total se calcule pendant le rendu, l'envoi se fait dans le gestionnaire de clic. Seul l'abonnement WebSocket synchronise le composant avec un système extérieur, avec un nettoyage pour se désabonner.</p>
+</div>
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">On clique sur l'utilisateur 1 puis aussitôt sur l'utilisateur 2. La réponse du 1 arrive en dernier. Que fait le drapeau <code>ignore</code> ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Le nettoyage du premier effet a mis son <code>ignore</code> à <code>true</code> : la réponse du 1 n'est pas affichée.</button>
+    <button type="button" data-k="b">Il annule la requête du 1 côté serveur.</button>
+    <button type="button" data-k="c">Il attend que les deux réponses soient arrivées pour choisir.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Quand <code>userId</code> passe de 1 à 2, React appelle le nettoyage du premier effet, qui lève son drapeau. La requête du 1 se termine quand même, mais son résultat est ignoré. Pour vraiment l'annuler, on utiliserait un <code>AbortController</code>.</p>
+</div>
+</section><!--/m08-->

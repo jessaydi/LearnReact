@@ -1,0 +1,253 @@
+
+<!-- ===================================================== 14 -->
+<section class="module" id="m14" data-short="Débugger">
+<header class="module-head"><span class="module-num">14</span><div><p class="module-kicker">Pratique</p><h2>Débugger une application React</h2></div></header>
+<div class="goals"><p class="label">Objectifs</p><ul>
+  <li>Savoir ce que montre chaque outil : console, React DevTools, onglet Réseau, points d'arrêt.</li>
+  <li>Mener une enquête avec les DevTools, sur un cas concret.</li>
+  <li>Suivre une méthode reproductible au lieu de tâtonner.</li>
+  <li>Reconnaître les messages d'erreur et les symptômes classiques, et leur cause.</li>
+</ul></div>
+
+<h3>La boîte à outils</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Outil</th><th>La question à laquelle il répond</th></tr></thead>
+<tbody>
+<tr><td><strong>Console</strong> du navigateur (F12)</td><td>Y a-t-il une erreur ? Les erreurs sont en rouge, les avertissements de React en jaune. Lis la <em>component stack</em> sous l'erreur : elle dit dans quel composant c'est arrivé.</td></tr>
+<tr><td><strong>React DevTools</strong>, onglet Components</td><td>Que contient ce composant ? Ses props, son état, ses hooks, les contextes qu'il lit, et qui l'a rendu.</td></tr>
+<tr><td><strong>React DevTools</strong>, onglet Profiler</td><td>Pourquoi c'est lent ? Quels composants se sont rendus pendant une interaction, combien de temps, et pourquoi (option « Record why each component rendered »).</td></tr>
+<tr><td>Réglage <strong>Highlight updates</strong></td><td>Qui se re-rend ? Les composants qui se re-rendent clignotent à l'écran, comme dans la démo du module 07.</td></tr>
+<tr><td>Onglet <strong>Réseau</strong> (Network)</td><td>Que dit vraiment le backend ? La requête est-elle partie, avec quel statut, quel corps de réponse, une erreur CORS ?</td></tr>
+<tr><td><strong>Points d'arrêt</strong> (onglet Sources, ou l'instruction <code>debugger;</code>)</td><td>Que valent les variables à cet instant ? Vite fournit les <em>source maps</em> : tu débugges ton code d'origine, pas le code compilé.</td></tr>
+</tbody></table></div>
+<p>Les React DevTools sont une extension pour Chrome, Firefox et Edge. Une fois installée, deux onglets apparaissent dans les outils de développement : Components et Profiler.</p>
+
+<h3>Une enquête avec les DevTools</h3>
+<p>Voici un bug signalé dans TaskFlow : <strong>« La tâche Coder est marquée terminée en base, mais l'écran l'affiche à faire, et le compteur dit 3 au lieu de 2. »</strong> Les DevTools ci-dessous sont simulés, mais ils montrent les mêmes informations que les vrais. Clique sur les composants, puis sur l'onglet Network, et cherche la cause avant de lire la solution.</p>
+
+<div class="demo" id="demo-devtools">
+  <div class="demo-head"><span>Démo · des React DevTools simulés</span></div>
+  <div class="demo-body">
+    <div class="dt-app" aria-label="L'application TaskFlow avec le bug">
+      <p class="dt-app-top"><b>TaskFlow</b><span>3 tâches restantes</span></p>
+      <ul class="mini-list">
+        <li><span class="box"></span>Lire</li>
+        <li><span class="box"></span>Coder</li>
+        <li><span class="box"></span>Tester</li>
+      </ul>
+    </div>
+    <div class="dt">
+      <div class="dt-tabs" role="tablist" aria-label="Onglets des outils de développement">
+        <button type="button" role="tab" data-dtab="components" aria-selected="true">⚛ Components</button>
+        <button type="button" role="tab" data-dtab="network" aria-selected="false">Network</button>
+      </div>
+      <div class="dt-pane" data-dpane="components">
+        <div class="dt-tree" role="listbox" aria-label="Arbre des composants">
+          <button type="button" class="dt-node" data-c="App" aria-selected="false">App</button>
+          <button type="button" class="dt-node d1" data-c="Header" aria-selected="false">Header</button>
+          <button type="button" class="dt-node d1" data-c="TaskList" aria-selected="false">TaskList</button>
+          <button type="button" class="dt-node d2" data-c="Item1" aria-selected="false">TaskItem <i>key="1"</i></button>
+          <button type="button" class="dt-node d2" data-c="Item2" aria-selected="true">TaskItem <i>key="2"</i></button>
+          <button type="button" class="dt-node d2" data-c="Item3" aria-selected="false">TaskItem <i>key="3"</i></button>
+        </div>
+        <div class="dt-inspect" data-out="inspect" aria-live="polite"></div>
+      </div>
+      <div class="dt-pane" data-dpane="network" hidden>
+        <p class="dt-req"><b>GET</b> /api/tasks <span class="dt-200">200 OK</span> <small>48 ms</small></p>
+        <p class="dt-sec">Response</p>
+        <pre class="dt-json">[
+  { "id": 1, "title": "Lire",   "is_done": false },
+  { "id": 2, "title": "Coder",  "is_done": true },
+  { "id": 3, "title": "Tester", "is_done": false }
+]</pre>
+      </div>
+    </div>
+  </div>
+</div>
+<details class="solution"><summary>Voir la solution de l'enquête</summary>
+<ol>
+<li><strong>Le composant fautif</strong> : <code>TaskItem key="2"</code> affiche une case décochée. Ses props contiennent <code>task: { id: 2, title: "Coder", is_done: true }</code>. La donnée est là, mais sous le nom <code>is_done</code>.</li>
+<li><strong>Le code du composant</strong> lit <code>task.done</code>, qui vaut <code>undefined</code> : la case est décochée. Même cause pour le compteur, qui filtre sur <code>!t.done</code>.</li>
+<li><strong>L'onglet Network</strong> confirme : le backend Python renvoie du snake_case (<code>is_done</code>), le front attend <code>done</code>. Aucune erreur nulle part, juste un contrat mal aligné.</li>
+<li><strong>La correction</strong> : aligner le contrat. Soit le backend renvoie <code>done</code> (un alias Pydantic, par exemple), soit la couche <code>api/</code> du front traduit les champs à un seul endroit :</li>
+</ol>
+<figure class="code"><figcaption>src/api/tasks.js</figcaption><pre><code class="language-javascript">export async function getTasks() {
+  const res = await fetch("/api/tasks");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const raw = await res.json();
+  return raw.map(t => ({ id: t.id, title: t.title, done: t.is_done })); // traduction du contrat
+}</code></pre></figure>
+</details>
+<aside class="note bridge"><p class="label">Côté backend</p>
+<p>Beaucoup de « bugs React » sont des écarts de contrat avec l'API : ASP.NET sérialise en camelCase par défaut (<code>isDone</code>), une API Python renvoie souvent du snake_case (<code>is_done</code>). Le front lit un champ qui n'existe pas, reçoit <code>undefined</code>, et n'affiche rien, sans aucune erreur. Le premier réflexe : ouvrir l'onglet Réseau et lire la vraie réponse.</p>
+</aside>
+
+<h3>Où placer un console.log ?</h3>
+<p>Un <code>console.log</code> ne dit pas la même chose selon l'endroit où tu le places, parce que ces endroits ne s'exécutent pas au même moment (module 07) :</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Placé…</th><th>Il s'affiche…</th><th>Utile pour savoir…</th></tr></thead>
+<tbody>
+<tr><td>dans le corps du composant, avant le <code>return</code></td><td>à chaque rendu (deux fois en développement)</td><td>avec quelles props et quel état le composant se rend, et combien de fois</td></tr>
+<tr><td>dans un <code>useEffect</code></td><td>après l'affichage, quand les dépendances changent</td><td>si l'effet tourne trop souvent, ou pas du tout</td></tr>
+<tr><td>dans un gestionnaire (<code>onClick</code>…)</td><td>au moment de l'action</td><td>si le clic arrive bien, et avec quelles valeurs</td></tr>
+<tr><td>dans une fonction de <code>api/</code></td><td>à chaque appel réseau</td><td>ce qui part vers le backend et ce qui revient</td></tr>
+</tbody></table></div>
+<p>Astuce : <code>console.log({ tasks, filter })</code> affiche les valeurs avec leur nom, et <code>console.table(tasks)</code> affiche une liste d'objets sous forme de tableau.</p>
+
+<h3>Une méthode en cinq étapes</h3>
+<ol class="steps five">
+  <li><b>Reproduire</b><span>trouver les étapes exactes qui déclenchent le bug.</span></li>
+  <li><b>Localiser</b><span>quel composant affiche la mauvaise chose ? (sélecteur des DevTools)</span></li>
+  <li><b>Inspecter</b><span>ses props et son état sont-ils corrects ?</span></li>
+  <li><b>Corriger</b><span>une hypothèse, une modification minimale.</span></li>
+  <li><b>Vérifier</b><span>le bug a disparu, rien d'autre n'a cassé, la console est propre.</span></li>
+</ol>
+<p>L'étape 3 est le cœur du diagnostic. Grâce au flux à sens unique (module 04), chaque réponse t'envoie dans une direction précise :</p>
+<div class="decide" data-decide>
+  <p class="label">Aide au diagnostic · l'écran affiche une valeur fausse</p>
+  <ol class="dq-trail" data-out="trail"></ol>
+  <div class="dq" data-node="start">
+    <p class="dq-q">Sélectionne le composant qui affiche la mauvaise chose. Ses props sont-elles justes ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="q-state">Oui</button><button type="button" class="btn ghost" data-go="q-source">Non</button></div>
+  </div>
+  <div class="dq" data-node="q-source" hidden>
+    <p class="dq-q">Remonte au composant qui fournit cette prop (« rendered by » dans les DevTools). La valeur vient-elle de l'API ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-network">Oui</button><button type="button" class="btn ghost" data-go="r-up">Non, d'un calcul, d'un hook ou d'un contexte</button></div>
+  </div>
+  <div class="dq" data-node="q-state" hidden>
+    <p class="dq-q">Et son état (section « hooks » des DevTools) est-il juste ?</p>
+    <div class="dq-a"><button type="button" class="btn" data-go="r-jsx">Oui</button><button type="button" class="btn ghost" data-go="r-setter">Non</button></div>
+  </div>
+  <div class="dq dr" data-node="r-network" hidden><p class="dr-t">Ouvre l'onglet Réseau</p><p>Compare la réponse réelle avec ce que le front attend : nom des champs, types (<code>"true"</code> au lieu de <code>true</code>), valeurs <code>null</code>. Si la réponse est fausse, le bug est côté backend ; si elle est juste, il est dans la couche <code>api/</code> ou dans la façon de la stocker.</p></div>
+  <div class="dq dr" data-node="r-up" hidden><p class="dr-t">Pose la même question au parent</p><p>Ouvre le composant parent, le hook ou le provider qui produit la valeur, et recommence le diagnostic à ce niveau. Le bug est quelque part sur ce chemin.</p></div>
+  <div class="dq dr" data-node="r-setter" hidden><p class="dr-t">Cherche qui écrit cet état</p><p>Recherche tous les appels au setter (<code>setTasks</code>) ou au <code>dispatch</code>. Un <code>console.log</code> ou un point d'arrêt dans chaque gestionnaire te dira lequel écrit la mauvaise valeur. Vérifie aussi les mutations (module 05).</p></div>
+  <div class="dq dr" data-node="r-jsx" hidden><p class="dr-t">Le bug est dans ce composant</p><p>Props et état sont justes : c'est le calcul ou le JSX. Un nom de champ, une condition, un <code>&&</code> avec un 0. Ajoute un <code>console.log</code> des valeurs calculées juste avant le <code>return</code>.</p></div>
+  <button type="button" class="btn ghost small" data-act="restart">Recommencer</button>
+</div>
+
+<h3>Dictionnaire des messages d'erreur</h3>
+<div class="table-wrap wrapcode"><table>
+<thead><tr><th>Message</th><th>Cause probable</th><th>Correction</th></tr></thead>
+<tbody>
+<tr><td><code>Each child in a list should have a unique "key" prop</code></td><td>Un <code>map</code> sans <code>key</code>.</td><td>Ajouter <code>key={item.id}</code> sur l'élément renvoyé par <code>map</code> (module 06).</td></tr>
+<tr><td><code>Too many re-renders</code></td><td>Un setter appelé pendant le rendu, souvent <code>onClick={setOpen(true)}</code>.</td><td>Passer une fonction : <code>onClick={() => setOpen(true)}</code>.</td></tr>
+<tr><td><code>Maximum update depth exceeded</code></td><td>Un effet qui modifie l'état et dont les dépendances changent à chaque rendu.</td><td>Vérifier les dépendances ; supprimer l'effet si la valeur est dérivable (module 08).</td></tr>
+<tr><td><code>Cannot read properties of undefined (reading 'map')</code></td><td>Les données ne sont pas encore chargées, ou la propriété a un autre nom.</td><td>État initial <code>[]</code>, garde de chargement, vérifier le nom dans l'onglet Réseau.</td></tr>
+<tr><td><code>Objects are not valid as a React child</code></td><td>On affiche un objet entier : <code>{user}</code>.</td><td>Afficher un champ : <code>{user.name}</code> (module 03).</td></tr>
+<tr><td><code>Invalid hook call</code></td><td>Hook appelé hors d'un composant ou d'un custom hook, ou deux copies de React installées.</td><td>Déplacer l'appel au premier niveau d'un composant ou d'un custom hook.</td></tr>
+<tr><td><code>Rendered more hooks than during the previous render</code></td><td>Hook dans une condition, ou après un <code>return</code> anticipé.</td><td>Remonter tous les hooks au début du composant (module 09).</td></tr>
+<tr><td><code>A component is changing an uncontrolled input to be controlled</code></td><td>La valeur d'un champ valait <code>undefined</code> au départ.</td><td>Initialiser avec <code>""</code> (module 06).</td></tr>
+</tbody></table></div>
+
+<h3>Symptômes sans message d'erreur</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Symptôme</th><th>Cause probable</th></tr></thead>
+<tbody>
+<tr><td>L'écran ne se met pas à jour après une action</td><td>État modifié sur place (<code>push</code>, affectation) : même adresse (module 05).</td></tr>
+<tr><td>Les <code>console.log</code> apparaissent en double</td><td>StrictMode en développement. Normal (module 07).</td></tr>
+<tr><td>Un callback ou un minuteur utilise une vieille valeur</td><td>Closure périmée : dépendance manquante, ou setter sans forme fonction (module 08).</td></tr>
+<tr><td>L'état se remet à zéro de façon inattendue</td><td>Le type, la position ou la <code>key</code> du composant a changé, ou il est déclaré dans un autre composant (module 07).</td></tr>
+<tr><td>Un champ perd le focus à chaque frappe</td><td>Composant déclaré dans un autre composant, ou <code>key</code> qui change à chaque rendu.</td></tr>
+<tr><td>Après une suppression, les cases cochées se décalent</td><td><code>key={index}</code> sur une liste qui change (module 06).</td></tr>
+<tr><td>Une requête part en boucle (onglet Réseau)</td><td>Effet dont une dépendance est un objet ou une fonction recréés à chaque rendu (module 08).</td></tr>
+<tr><td>Une donnée affichée est celle d'une requête précédente</td><td>Réponse périmée : pas de drapeau <code>ignore</code> dans l'effet (module 08).</td></tr>
+<tr><td>Un champ affiché est vide, sans erreur</td><td>Nom de champ différent entre le backend et le front.</td></tr>
+</tbody></table></div>
+
+<aside class="note recap"><p class="label">En bref</p>
+<ul>
+<li>Console pour les erreurs, DevTools pour les props et l'état, Réseau pour la vérité du backend, points d'arrêt pour les valeurs à un instant précis.</li>
+<li>Méthode : reproduire, localiser, inspecter, corriger, vérifier.</li>
+<li>Props fausses : remonte vers le parent. État faux : cherche qui l'écrit. Tout est juste : le bug est dans le calcul ou le JSX.</li>
+</ul>
+</aside>
+
+<div class="exercise"><p class="label">Exercice · chasse aux bugs</p>
+<p>Ce composant contient cinq bugs. Trouve-les avant de regarder la solution.</p>
+<figure class="code"><figcaption>TaskBoard.jsx <span class="tag bad">5 bugs</span></figcaption><pre><code class="language-jsx">function TaskBoard({ userId }) {
+  const [tasks, setTasks] = useState();
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    fetch(`/api/users/${userId}/tasks`)
+      .then(res => res.json())
+      .then(data => setTasks(data));
+  }, []);
+
+  function addTask(title) {
+    tasks.push({ id: crypto.randomUUID(), title, done: false });
+    setTasks(tasks);
+  }
+
+  const visible = tasks.filter(t => filter === "all" || !t.done);
+
+  return (
+    <>
+      <button onClick={setFilter("todo")}>À faire</button>
+      <ul>
+        {visible.map((t, i) => <li key={i}>{t.title}</li>)}
+      </ul>
+    </>
+  );
+}</code></pre></figure>
+<details class="solution"><summary>Voir la solution</summary>
+<ol>
+<li><code>useState()</code> vaut <code>undefined</code> : <code>tasks.filter</code> plante au premier rendu. Initialiser avec <code>[]</code>.</li>
+<li>L'effet utilise <code>userId</code> mais ne le déclare pas : changer d'utilisateur n'a aucun effet. Ajouter <code>[userId]</code> et un drapeau <code>ignore</code> contre les réponses périmées.</li>
+<li><code>push</code> modifie le tableau sur place, et <code>setTasks(tasks)</code> passe la même adresse : pas de nouvel affichage. Créer un nouveau tableau.</li>
+<li><code>onClick={setFilter("todo")}</code> appelle le setter pendant le rendu : <em>Too many re-renders</em>. Passer une fonction.</li>
+<li><code>key={i}</code> sur une liste qui sera filtrée : utiliser <code>t.id</code>.</li>
+</ol>
+<figure class="code"><figcaption>TaskBoard.jsx <span class="tag good">corrigé</span></figcaption><pre><code class="language-jsx">function TaskBoard({ userId }) {
+  const [tasks, setTasks] = useState([]);
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    let ignore = false;
+    fetch(`/api/users/${userId}/tasks`)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => { if (!ignore) setTasks(data); })
+      .catch(err => console.error(err));
+    return () => { ignore = true; };
+  }, [userId]);
+
+  function addTask(title) {
+    setTasks(ts => [...ts, { id: crypto.randomUUID(), title, done: false }]);
+  }
+
+  const visible = tasks.filter(t => filter === "all" || !t.done);
+
+  return (
+    <>
+      <button onClick={() => setFilter("todo")}>À faire</button>
+      <ul>
+        {visible.map(t => <li key={t.id}>{t.title}</li>)}
+      </ul>
+    </>
+  );
+}</code></pre></figure>
+</details>
+</div>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q">Un composant affiche un mauvais nom. Dans les DevTools, sa prop <code>user</code> contient déjà ce mauvais nom. Où cherches-tu ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Dans le JSX de ce composant.</button>
+    <button type="button" data-k="b">Dans ses effets.</button>
+    <button type="button" data-k="c">Plus haut : chez le parent qui fournit la prop, voire dans la réponse de l'API.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Si la prop est déjà fausse, le composant ne fait qu'afficher ce qu'on lui donne. Remonte le flux de données : parent, puis contexte ou hook qui la produit, puis la réponse réseau.</p>
+</div>
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">Un champ s'affiche vide, sans aucune erreur dans la console. Quel est ton premier réflexe ?</p>
+  <div class="quiz-opts">
+    <button type="button" data-k="a">Ouvrir l'onglet Réseau et comparer le nom du champ dans la réponse avec celui lu par le composant.</button>
+    <button type="button" data-k="b">Désactiver StrictMode.</button>
+    <button type="button" data-k="c">Ajouter un <code>useEffect</code> qui recharge les données.</button>
+  </div>
+  <p class="quiz-why" hidden><strong class="verdict"></strong>Lire une propriété qui n'existe pas renvoie <code>undefined</code> sans erreur, et React n'affiche rien pour <code>undefined</code>. Un écart de nom entre le backend et le front est la cause la plus fréquente.</p>
+</div>
+</section><!--/m14-->

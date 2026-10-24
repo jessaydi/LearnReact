@@ -1,0 +1,920 @@
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Outils communs ---------- */
+  function hl(el) { try { if (window.Prism && Prism.highlightElement) Prism.highlightElement(el); } catch (e) {} }
+  function flash(el) { el.classList.remove("is-flash"); void el.offsetWidth; el.classList.add("is-flash"); }
+  function outIn(root) { return function (k) { return root.querySelector('[data-out="' + k + '"]'); }; }
+  function setSeg(root, mode) {
+    root.querySelectorAll(".seg [data-mode]").forEach(function (b) {
+      b.setAttribute("aria-checked", b.getAttribute("data-mode") === mode ? "true" : "false");
+    });
+  }
+  function setCode(node, text) { if (!node) return; node.textContent = text; hl(node); }
+  function verdict(node, text, cls) { if (!node) return; node.textContent = text; node.className = "mem-verdict " + (cls || ""); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clone(list) { return list.map(function (t) { return Object.assign({}, t); }); }
+  function logger(box, max) {
+    return {
+      clear: function () { box.innerHTML = ""; },
+      add: function (cls, text) {
+        var empty = box.querySelector(".l-empty"); if (empty) empty.remove();
+        var p = el("p", cls, text);
+        box.appendChild(p);
+        if (max) { while (box.children.length > max) box.removeChild(box.firstChild); }
+        box.scrollTop = box.scrollHeight;
+      }
+    };
+  }
+
+  /* ---------- Aides à la décision (modules 08, 14, 15) ---------- */
+  document.querySelectorAll("[data-decide]").forEach(function (root) {
+    var nodes = root.querySelectorAll(".dq");
+    var trail = root.querySelector('[data-out="trail"]');
+    function show(id) { nodes.forEach(function (n) { n.hidden = n.getAttribute("data-node") !== id; }); }
+    root.addEventListener("click", function (e) {
+      var go = e.target.closest("[data-go]");
+      if (go) {
+        var q = go.closest(".dq").querySelector(".dq-q");
+        var li = el("li");
+        li.appendChild(el("span", "dq-tq", q ? q.textContent : ""));
+        li.appendChild(el("span", "dq-ta", go.textContent));
+        trail.appendChild(li);
+        show(go.getAttribute("data-go"));
+        return;
+      }
+      if (e.target.closest('[data-act="restart"]')) { trail.innerHTML = ""; show("start"); }
+    });
+    show("start");
+  });
+
+  /* ---------- 07 · Qui se re-rend ? ---------- */
+  (function () {
+    var root = document.getElementById("demo-render"); if (!root) return;
+    var out = outIn(root);
+    var counts = {}, unread, title, editing;
+    function note(k, t) { var n = root.querySelector('[data-note="' + k + '"]'); if (n) n.textContent = t; }
+    function notes() {
+      note("app", "état : unread = " + unread);
+      note("header", "affiche « " + unread + " notifications »");
+      note("list", "état : title = « " + title + " »");
+      note("item2", "état : isEditing = " + editing);
+    }
+    function reset() {
+      unread = 3; title = "Mes tâches"; editing = false;
+      root.querySelectorAll(".rnode").forEach(function (n) {
+        counts[n.getAttribute("data-node")] = 1; n.querySelector("b").textContent = 1; n.classList.remove("is-flash");
+      });
+      notes();
+      out("stats").textContent = "Le chiffre de chaque composant compte ses rendus.";
+      out("explain").textContent = "Clique sur un bouton : les composants qui se re-rendent clignotent.";
+    }
+    var TEXT = {
+      app: ["le texte du badge, dans Header", "App change d'état : App et ses 6 descendants se re-rendent, même Footer, dont les props n'ont pas changé. Mais seul Header affiche unread : c'est le seul endroit du DOM modifié."],
+      list: ["le titre de la liste", "TaskList change d'état : TaskList et ses trois TaskItem se re-rendent. App, Header et Footer ne bougent pas : ils sont au-dessus ou à côté."],
+      item2: ["la ligne n°2, qui passe en mode édition", "Seul TaskItem n°2 se re-rend : son état est local, ni ses frères ni son parent ne sont concernés."]
+    };
+    root.addEventListener("click", function (e) {
+      if (e.target.closest('[data-act="reset"]')) { reset(); return; }
+      var b = e.target.closest("[data-set]"); if (!b) return;
+      var key = b.getAttribute("data-set");
+      if (key === "app") unread++;
+      else if (key === "list") title = title === "Mes tâches" ? "Aujourd'hui" : "Mes tâches";
+      else if (key === "item2") editing = !editing;
+      var start = root.querySelector('.rnode[data-node="' + key + '"]');
+      var nodes = start.closest("li").querySelectorAll(".rnode");
+      nodes.forEach(function (n) {
+        var k = n.getAttribute("data-node"); counts[k] = (counts[k] || 1) + 1;
+        n.querySelector("b").textContent = counts[k]; flash(n);
+      });
+      notes();
+      out("stats").textContent = "Fonctions appelées : " + nodes.length + " · modifications du DOM : 1 (" + TEXT[key][0] + ")";
+      out("explain").textContent = TEXT[key][1];
+    });
+    reset();
+  })();
+
+  /* ---------- 07 · Un composant impur ---------- */
+  (function () {
+    var root = document.getElementById("demo-pure"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 8);
+    var strictBox = root.querySelector("#pure-strict");
+    var mode = "impure", guest = 0;
+    var CODE = {
+      impure: "let guest = 0;                 // une variable EXTÉRIEURE au composant\n\nfunction Cup() {\n  guest = guest + 1;           // modifiée pendant le rendu : impur\n  return <li>Tasse pour l'invité n°{guest}</li>;\n}\n\nfunction TeaSet() {\n  return <ul><Cup /><Cup /><Cup /></ul>;\n}",
+      pure: "function Cup({ guest }) {      // la donnée arrive en prop\n  return <li>Tasse pour l'invité n°{guest}</li>;\n}\n\nfunction TeaSet() {\n  return <ul><Cup guest={1} /><Cup guest={2} /><Cup guest={3} /></ul>;\n}"
+    };
+    function renderTeaSet(reason) {
+      var strict = strictBox.checked, shown = [], calls = 0;
+      for (var i = 1; i <= 3; i++) {
+        var val = i;
+        for (var p = 0; p < (strict ? 2 : 1); p++) {
+          calls++;
+          if (mode === "impure") { guest = guest + 1; val = guest; }
+        }
+        shown.push(val);
+      }
+      var ul = out("cups"); ul.innerHTML = "";
+      shown.forEach(function (n) { ul.appendChild(el("li", null, "Tasse pour l'invité n°" + n)); });
+      out("guest").textContent = mode === "impure" ? guest : "aucune";
+      log.add("l-render", reason + " : Cup appelée " + calls + " fois" + (strict ? " (StrictMode appelle chaque composant deux fois)" : "") +
+        (mode === "impure" ? " → guest vaut maintenant " + guest : ""));
+      var exact = shown.join(",") === "1,2,3";
+      if (mode === "pure") verdict(out("verdict"), "Toujours 1, 2, 3, quel que soit le nombre d'appels : mêmes props, même résultat. C'est un rendu pur.", "ok");
+      else if (exact) verdict(out("verdict"), "Tout semble juste : 1, 2, 3. Clique sur « Re-rendre », ou active StrictMode.", "");
+      else verdict(out("verdict"), "L'écran affiche " + shown.join(", ") + " au lieu de 1, 2, 3, alors que rien n'a changé dans les données. Le résultat dépend du nombre d'appels : c'est le signe d'un rendu impur.", "ko");
+    }
+    function reset() { guest = 0; log.clear(); setCode(out("code"), CODE[mode]); renderTeaSet("Premier rendu"); }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); reset(); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      if (a.getAttribute("data-act") === "render") renderTeaSet("Re-rendu");
+      else if (a.getAttribute("data-act") === "reset") reset();
+    });
+    strictBox.addEventListener("change", reset);
+    reset();
+  })();
+
+  /* ---------- 07 · La photo du rendu ---------- */
+  (function () {
+    var root = document.getElementById("demo-snap"); if (!root) return;
+    var out = outIn(root);
+    var count = 0, renders = 1, timers = [];
+    function paint() { out("count").textContent = count; out("renders").textContent = renders; }
+    function placeholder() { var ul = out("msgs"); ul.innerHTML = ""; ul.appendChild(el("li", "muted", "Aucun message programmé.")); }
+    root.addEventListener("click", function (e) {
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      var act = a.getAttribute("data-act");
+      if (act === "inc") { count++; renders++; paint(); return; }
+      if (act === "reset") { timers.forEach(clearTimeout); timers = []; count = 0; renders = 1; paint(); placeholder(); return; }
+      if (act === "later") {
+        var ul = out("msgs"), ph = ul.querySelector(".muted"); if (ph) ph.remove();
+        var snap = count, r = renders;
+        var li = el("li", "pending", "Programmé pendant le rendu n°" + r + ", où count = " + snap + ". Affichage dans 3 secondes…");
+        ul.appendChild(li);
+        while (ul.children.length > 5) ul.removeChild(ul.firstChild);
+        timers.push(setTimeout(function () {
+          li.className = snap !== count ? "is-diff" : "is-ok";
+          li.textContent = "« count vaut " + snap + " »";
+          li.appendChild(el("small", null, " message créé au rendu n°" + r + " · l'écran affiche maintenant " + count));
+        }, 3000));
+      }
+    });
+    paint();
+  })();
+
+  /* ---------- 07 · Remonter l'état ---------- */
+  (function () {
+    var root = document.getElementById("demo-lift"); if (!root) return;
+    var out = outIn(root);
+    var input = root.querySelector("#lift-input");
+    var TASKS = ["Lire le module 7", "Relire la PR", "Préparer la démo", "Lire la doc de React"];
+    var mode = "local";
+    var CODE = {
+      local: "function TasksPage() {\n  return (\n    <>\n      <SearchBar />   {/* query vit ici, enfermé dans SearchBar */}\n      <TaskList />    {/* aucun moyen de le lire */}\n    </>\n  );\n}\n\nfunction SearchBar() {\n  const [query, setQuery] = useState(\"\");\n  return <input value={query} onChange={e => setQuery(e.target.value)} />;\n}",
+      lifted: "function TasksPage() {\n  const [query, setQuery] = useState(\"\");   // l'état remonte chez le parent commun\n  return (\n    <>\n      <SearchBar value={query} onChange={setQuery} />\n      <TaskList query={query} />\n    </>\n  );\n}"
+    };
+    function paint() {
+      var q = input.value;
+      out("owner").textContent = mode === "local"
+        ? "query = « " + q + " » vit dans SearchBar, et nulle part ailleurs."
+        : "SearchBar reçoit value = « " + q + " » de TasksPage, et le lui renvoie à chaque frappe.";
+      var visible = mode === "local" ? TASKS : TASKS.filter(function (t) { return t.toLowerCase().indexOf(q.trim().toLowerCase()) !== -1; });
+      var ul = out("list"); ul.innerHTML = "";
+      if (!visible.length) ul.appendChild(el("li", "muted", "Aucun résultat"));
+      visible.forEach(function (t) { ul.appendChild(el("li", null, t)); });
+      out("note").textContent = mode === "local"
+        ? "TaskList ne reçoit pas query : elle affiche tout." + (q ? " La recherche ne sert à rien." : "")
+        : "TaskList reçoit query = « " + q + " » : " + visible.length + " tâche(s) sur " + TASKS.length + ".";
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (!m) return;
+      mode = m.getAttribute("data-mode"); setSeg(root, mode); setCode(out("code"), CODE[mode]); paint();
+    });
+    input.addEventListener("input", paint);
+    setCode(out("code"), CODE[mode]); paint();
+  })();
+
+  /* ---------- 07 · L'état survit-il ? ---------- */
+  (function () {
+    var root = document.getElementById("demo-identity"); if (!root) return;
+    var out = outIn(root);
+    var toggleBtn = root.querySelector('[data-act="toggle"]');
+    var mode = "same", count = 0, flag = true, userId = 1;
+    var CODE = {
+      same: "{isAdmin\n  ? <Counter label=\"admin\" />\n  : <Counter label=\"utilisateur\" />}\n// à cette position : toujours un Counter",
+      type: "{isEditing\n  ? <Counter label=\"édition\" />\n  : <p>Mode lecture</p>}\n// à cette position : un Counter, puis un <p>",
+      key: "<Counter key={userId} label={\"utilisateur \" + userId} />\n// même type, même position, mais la key change"
+    };
+    var LABEL = { same: "Basculer isAdmin", type: "Basculer isEditing", key: "Changer userId" };
+    function stage() {
+      var s = out("stage"); s.innerHTML = "";
+      if (mode === "type" && !flag) { s.appendChild(el("p", "muted", "Mode lecture : un <p>, sans compteur.")); return; }
+      var label = mode === "same" ? (flag ? "Counter admin" : "Counter utilisateur") : mode === "type" ? "Counter édition" : "Counter utilisateur " + userId;
+      var box = el("div", "counter-box");
+      box.appendChild(el("b", null, label));
+      var c = el("span", "cnt", "count = " + count); box.appendChild(c);
+      var b = el("button", "btn small", "+1"); b.type = "button"; b.setAttribute("data-act", "inc"); box.appendChild(b);
+      s.appendChild(box);
+    }
+    function setMode(m) {
+      mode = m; count = 0; flag = true; userId = 1; setSeg(root, m);
+      setCode(out("code"), CODE[m]); toggleBtn.textContent = LABEL[m];
+      verdict(out("verdict"), "Clique plusieurs fois sur +1, puis sur « " + LABEL[m] + " ».");
+      stage();
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { setMode(m.getAttribute("data-mode")); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      var act = a.getAttribute("data-act");
+      if (act === "reset") { setMode(mode); return; }
+      if (act === "inc") { count++; stage(); return; }
+      if (act !== "toggle") return;
+      if (mode === "same") {
+        flag = !flag;
+        verdict(out("verdict"), "Toujours un Counter à la même position : React a gardé son état. count vaut toujours " + count + ", seule la prop label a changé.", "ok");
+      } else if (mode === "type") {
+        if (flag) {
+          flag = false; var lost = count; count = 0;
+          verdict(out("verdict"), "Un <p> a pris la place du Counter : React a vidé le casier. La valeur " + lost + " est perdue.", "ko");
+        } else {
+          flag = true; count = 0;
+          verdict(out("verdict"), "Un Counter neuf revient à cette position : il repart de 0.", "ko");
+        }
+      } else {
+        var prev = userId; userId++; count = 0;
+        verdict(out("verdict"), "La key passe de " + prev + " à " + userId + " : pour React, c'est un autre composant. L'état repart de zéro.", "ko");
+      }
+      stage();
+    });
+    setMode("same");
+  })();
+
+  /* ---------- 08 · Quand l'effet s'exécute-t-il ? ---------- */
+  (function () {
+    var root = document.getElementById("demo-effect"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"));
+    var codeEl = out("effect-code");
+    var toggleBtn = root.querySelector('[data-act="toggle"]');
+    var strictBox = root.querySelector("#eff-strict");
+    var CODE = {
+      none: "useEffect(() => {\n  const conn = connect(userId);\n  return () => conn.disconnect();\n}); // pas de tableau",
+      empty: "useEffect(() => {\n  const conn = connect(userId);\n  return () => conn.disconnect();\n}, []);",
+      deps: "useEffect(() => {\n  const conn = connect(userId);\n  return () => conn.disconnect();\n}, [userId]);"
+    };
+    var s = { mode: "deps", mounted: true, userId: 1, conn: null, renderN: 0 };
+    function status() {
+      out("uid").textContent = s.userId;
+      var c = out("conn");
+      c.textContent = s.conn === null ? "personne" : "utilisateur " + s.conn;
+      c.classList.toggle("warn", s.conn !== null && s.conn !== s.userId);
+      toggleBtn.textContent = s.mounted ? "Démonter" : "Monter";
+    }
+    function render() { s.renderN++; log.add("l-render", "rendu n°" + s.renderN + " (userId = " + s.userId + ")"); }
+    function effect() { s.conn = s.userId; log.add("l-effect", "effet : connexion à l'utilisateur " + s.userId); }
+    function cleanup() { if (s.conn !== null) { log.add("l-clean", "nettoyage : déconnexion de l'utilisateur " + s.conn); s.conn = null; } }
+    function mount() {
+      s.mounted = true; s.renderN = 0;
+      log.add("l-skip", "— montage du composant —"); render(); effect();
+      if (strictBox.checked) {
+        log.add("l-skip", "StrictMode (développement) : React simule un démontage puis un remontage");
+        cleanup(); effect();
+      }
+    }
+    function setMode(m) {
+      s.mode = m; s.userId = 1; s.conn = null;
+      setSeg(root, m); setCode(codeEl, CODE[m]);
+      log.clear(); mount(); status();
+    }
+    root.addEventListener("click", function (e) {
+      var modeBtn = e.target.closest("[data-mode]");
+      if (modeBtn) { setMode(modeBtn.getAttribute("data-mode")); return; }
+      var t = e.target.closest("[data-act]"); if (!t) return;
+      var act = t.getAttribute("data-act");
+      if (act === "reset") { setMode(s.mode); return; }
+      if (act === "toggle") {
+        if (s.mounted) { log.add("l-skip", "— démontage du composant —"); cleanup(); s.mounted = false; }
+        else { mount(); }
+        status(); return;
+      }
+      if (!s.mounted) {
+        if (act === "change") s.userId++;
+        log.add("l-skip", "Le composant est démonté : aucun rendu, aucun effet.");
+        status(); return;
+      }
+      if (act === "rerender") {
+        render();
+        if (s.mode === "none") { cleanup(); effect(); }
+        else if (s.mode === "empty") { log.add("l-skip", "dépendances [] inchangées → effet ignoré"); }
+        else { log.add("l-skip", "dépendances [" + s.userId + "] identiques à [" + s.userId + "] → effet ignoré"); }
+      } else if (act === "change") {
+        var prev = s.userId; s.userId++;
+        render();
+        if (s.mode === "none") { cleanup(); effect(); }
+        else if (s.mode === "empty") {
+          log.add("l-skip", "dépendances [] inchangées → effet ignoré");
+          log.add("l-warn", "bug : toujours connecté à l'utilisateur " + s.conn + " alors que userId vaut " + s.userId + ". userId manque dans les dépendances.");
+        } else {
+          log.add("l-skip", "userId a changé (" + prev + " → " + s.userId + ") → nettoyage, puis nouvel effet");
+          cleanup(); effect();
+        }
+      }
+      status();
+    });
+    strictBox.addEventListener("change", function () { setMode(s.mode); });
+    setMode("deps");
+  })();
+
+  /* ---------- 08 · La course des requêtes ---------- */
+  (function () {
+    var root = document.getElementById("demo-race"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 10);
+    var USERS = { ada: { name: "Ada", delay: 2000 }, grace: { name: "Grace", delay: 500 } };
+    var CODE = {
+      naive: "useEffect(() => {\n  fetchUser(userId).then(user => setUser(user)); // affiche la réponse, même périmée\n}, [userId]);",
+      ignore: "useEffect(() => {\n  let ignore = false;\n  fetchUser(userId).then(user => {\n    if (!ignore) setUser(user);     // seulement si toujours d'actualité\n  });\n  return () => { ignore = true; };  // l'ancienne requête devient périmée\n}, [userId]);"
+    };
+    var mode = "naive", current = null, shown = null, seq = 0, last = null, timers = [];
+    function paint() {
+      out("req").textContent = current ? USERS[current].name : "aucun";
+      out("shown").textContent = shown ? USERS[shown].name : "aucun";
+    }
+    function judge() {
+      if (!current) return;
+      if (shown && shown !== current) verdict(out("verdict"), "L'utilisateur demandé est " + USERS[current].name + ", mais l'écran affiche " + USERS[shown].name + " : une réponse périmée a écrasé la bonne.", "ko");
+      else if (shown === current) verdict(out("verdict"), "Le profil affiché correspond à l'utilisateur demandé.", "ok");
+      else verdict(out("verdict"), "En attente de la réponse…", "");
+    }
+    function reset() {
+      timers.forEach(clearTimeout); timers = [];
+      current = null; shown = null; seq = 0; last = null;
+      log.clear(); setCode(out("code"), CODE[mode]); paint();
+      verdict(out("verdict"), "Clique sur Ada, puis tout de suite sur Grace.");
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); reset(); return; }
+      if (e.target.closest('[data-act="reset"]')) { reset(); return; }
+      var u = e.target.closest("[data-user]"); if (!u) return;
+      var key = u.getAttribute("data-user");
+      if (key === current) { log.add("l-skip", "userId inchangé (" + USERS[key].name + ") : dépendances identiques, pas de nouvel effet"); return; }
+      if (last && mode === "ignore") {
+        last.ignore = true;
+        log.add("l-clean", "nettoyage de l'effet n°" + last.id + " : ignore = true pour la requête de " + USERS[last.user].name);
+      }
+      current = key; seq++;
+      var eff = { id: seq, user: key, ignore: false }; last = eff;
+      log.add("l-render", "userId = " + USERS[key].name + " → rendu → effet n°" + eff.id + " : requête GET /api/users/" + key + " envoyée");
+      paint(); judge();
+      timers.push(setTimeout(function () {
+        if (mode === "ignore" && eff.ignore) {
+          log.add("l-skip", "réponse n°" + eff.id + " (" + USERS[eff.user].name + ") arrivée… ignorée, elle est périmée");
+        } else {
+          shown = eff.user;
+          log.add(shown === current ? "l-effect" : "l-warn", "réponse n°" + eff.id + " (" + USERS[eff.user].name + ") arrivée → setUser → affichée" + (shown === current ? "" : " alors qu'elle est périmée"));
+        }
+        paint(); judge();
+      }, USERS[key].delay));
+    });
+    reset();
+  })();
+
+  /* ---------- 08 · La closure périmée ---------- */
+  (function () {
+    var root = document.getElementById("demo-stale"); if (!root) return;
+    var out = outIn(root);
+    var a = 0, b = 0, id = null, ticks = 0;
+    function paint() { out("a").textContent = a; out("b").textContent = b; }
+    function stop() { if (id) { clearInterval(id); id = null; } }
+    root.addEventListener("click", function (e) {
+      var t = e.target.closest("[data-act]"); if (!t) return;
+      var act = t.getAttribute("data-act");
+      if (act === "start") {
+        stop(); a = 0; b = 0; ticks = 0; paint();
+        var captured = 0; // la valeur de seconds au rendu où l'effet a été créé
+        out("a-note").textContent = "chaque seconde : setSeconds(0 + 1)";
+        id = setInterval(function () {
+          a = captured + 1; b = b + 1; ticks++; paint();
+          if (ticks >= 20) stop();
+        }, 1000);
+      } else if (act === "stop") { stop(); }
+      else if (act === "reset") { stop(); a = 0; b = 0; paint(); out("a-note").textContent = "lit la valeur figée du premier rendu"; }
+    });
+    paint();
+  })();
+
+  /* ---------- 09 · Les cases des hooks ---------- */
+  (function () {
+    var root = document.getElementById("demo-slots"); if (!root) return;
+    var out = outIn(root);
+    var nextBtn = root.querySelector('[data-act="next"]');
+    var mode = "cond", step = 0;
+    var CODE = {
+      cond: "function Profile({ isAdmin }) {\n  const [name, setName] = useState(\"Ada\");      // case 1\n  if (isAdmin) {\n    const [perms, setPerms] = useState([]);     // case 2… seulement si admin\n  }\n  const [age, setAge] = useState(36);           // case 2 ou 3, selon les rendus\n  // …\n}",
+      always: "function Profile({ isAdmin }) {\n  const [name, setName] = useState(\"Ada\");      // case 1, toujours\n  const [perms, setPerms] = useState([]);       // case 2, toujours\n  const [age, setAge] = useState(36);           // case 3, toujours\n\n  // La condition va dans l'affichage, pas autour du hook\n  return isAdmin ? <AdminView perms={perms} /> : <UserView name={name} />;\n}"
+    };
+    var DATA = {
+      cond: {
+        stored: ['name = "Ada"', "age = 36"],
+        asked: ["useState pour name", "useState pour perms", "useState pour age"],
+        got: [['"Ada"', "ok"], ["36 : l'âge !", "ko"], ["rien de rangé", "ko"]]
+      },
+      always: {
+        stored: ['name = "Ada"', "perms = []", "age = 36"],
+        asked: ["useState pour name", "useState pour perms", "useState pour age"],
+        got: [['"Ada"', "ok"], ["[]", "ok"], ["36", "ok"]]
+      }
+    };
+    function render() {
+      var d = DATA[mode], body = out("rows"); body.innerHTML = "";
+      for (var i = 0; i < 3; i++) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, "Case " + (i + 1)));
+        tr.appendChild(el("td", null, d.stored[i] || "—"));
+        tr.appendChild(el("td", null, step ? d.asked[i] : "—"));
+        tr.appendChild(step ? el("td", d.got[i][1], d.got[i][0]) : el("td", null, "—"));
+        body.appendChild(tr);
+      }
+      nextBtn.disabled = step === 1;
+      if (!step) verdict(out("verdict"), "Rendu n°1 avec isAdmin = false : React a rangé " + d.stored.length + " valeurs, dans l'ordre d'appel des hooks.");
+      else if (mode === "cond") verdict(out("verdict"), "perms reçoit 36, la valeur de age, et age ne trouve rien. React lève l'erreur « Rendered more hooks than during the previous render ».", "ko");
+      else verdict(out("verdict"), "Chaque hook retrouve sa case : l'ordre des appels n'a pas changé. La condition est dans l'affichage.", "ok");
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]");
+      if (m) { mode = m.getAttribute("data-mode"); step = 0; setSeg(root, mode); setCode(out("code"), CODE[mode]); render(); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      if (a.getAttribute("data-act") === "next") step = 1;
+      else if (a.getAttribute("data-act") === "reset") step = 0;
+      render();
+    });
+    setCode(out("code"), CODE[mode]); render();
+  })();
+
+  /* ---------- 09 · Variable, ref ou état ---------- */
+  (function () {
+    var root = document.getElementById("demo-ref"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 8);
+    var aReal, aScreen, bReal, bScreen, c, renders;
+    function paint() {
+      out("a-real").textContent = aReal; out("a-screen").textContent = aScreen;
+      out("b-real").textContent = bReal; out("b-screen").textContent = bScreen;
+      out("c-real").textContent = c; out("c-screen").textContent = c;
+    }
+    function reset() {
+      aReal = 0; aScreen = 0; bReal = 0; bScreen = 0; c = 0; renders = 1;
+      log.clear(); log.add("l-empty", "Le journal des clics s'affiche ici."); paint();
+    }
+    root.addEventListener("click", function (e) {
+      if (e.target.closest('[data-act="reset"]')) { reset(); return; }
+      var b = e.target.closest("[data-inc]"); if (!b) return;
+      var k = b.getAttribute("data-inc");
+      if (k === "a") { aReal++; log.add("l-let", "let : a = " + aReal + " dans la variable, mais React n'est pas prévenu. L'écran affiche toujours " + aScreen + "."); }
+      else if (k === "b") { bReal++; log.add("l-let", "ref : b.current = " + bReal + ". React ne réagit pas aux refs : l'écran affiche toujours " + bScreen + "."); }
+      else {
+        c++; renders++;
+        aReal = 0; aScreen = 0; bScreen = bReal;
+        log.add("l-state", "état : setC(" + c + ") → rendu n°" + renders + ". La fonction repart du début : let a = 0 (perdu), b.current vaut toujours " + bReal + " (gardé), c = " + c + ".");
+      }
+      paint();
+    });
+    reset();
+  })();
+
+  /* ---------- 09 · memo et useCallback ---------- */
+  (function () {
+    var root = document.getElementById("demo-memo"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 10);
+    var mode = "unstable", parentR = 1, childR = 1;
+    var HEAD = "const TaskList = memo(function TaskList({ tasks, onToggle }) {\n  /* … une liste coûteuse à rendre */\n});\n\nfunction TaskBoard() {\n  const [clicks, setClicks] = useState(0);\n  const [tasks, setTasks] = useState(initialTasks);\n\n";
+    var TAIL = "\n\n  return (\n    <>\n      <button onClick={() => setClicks(clicks + 1)}>Clics : {clicks}</button>\n      <TaskList tasks={tasks} onToggle={handleToggle} />\n    </>\n  );\n}";
+    var CODE = {
+      unstable: HEAD + "  // une NOUVELLE fonction à chaque rendu de TaskBoard\n  const handleToggle = id =>\n    setTasks(ts => ts.map(t => (t.id === id ? { ...t, done: !t.done } : t)));" + TAIL,
+      stable: HEAD + "  // la MÊME fonction d'un rendu à l'autre\n  const handleToggle = useCallback(id =>\n    setTasks(ts => ts.map(t => (t.id === id ? { ...t, done: !t.done } : t))), []);" + TAIL
+    };
+    function paint() { out("parent").textContent = parentR; out("child").textContent = childR; }
+    function reset() { parentR = 1; childR = 1; log.clear(); setCode(out("code"), CODE[mode]); paint(); }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); reset(); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      var act = a.getAttribute("data-act");
+      if (act === "reset") { reset(); return; }
+      parentR++;
+      if (act === "parent") {
+        log.add("l-render", "setClicks → TaskBoard se re-rend" + (mode === "unstable" ? " et crée une nouvelle fonction handleToggle" : ""));
+        if (mode === "unstable") { childR++; log.add("l-warn", "memo compare : tasks identique ✓, onToggle différente ✗ (nouvelle adresse) → TaskList se re-rend pour rien"); }
+        else log.add("l-skip", "memo compare : tasks identique ✓, onToggle identique ✓ (useCallback) → TaskList ne se re-rend pas");
+      } else if (act === "tasks") {
+        childR++;
+        log.add("l-state", "setTasks(nouveau tableau) → TaskBoard se re-rend");
+        log.add("l-effect", "memo compare : tasks différente ✗ → TaskList se re-rend, et c'est normal : ses données ont changé");
+      }
+      paint();
+    });
+    reset();
+  })();
+
+  /* ---------- 09 · Le reducer en action ---------- */
+  (function () {
+    var root = document.getElementById("demo-reducer"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 10);
+    var INITIAL = [{ id: 1, title: "Lire", done: false }, { id: 2, title: "Coder", done: false }, { id: 3, title: "Tester", done: false }];
+    var LINES = { added: [3, 4], toggled: [5, 6], deleted: [7, 8], renamed: [9, 10] };
+    var tasks, nextId;
+    var lines = root.querySelectorAll(".ln");
+    function paint() {
+      var ul = out("state"); ul.innerHTML = "";
+      if (!tasks.length) ul.appendChild(el("li", "muted", "(liste vide)"));
+      tasks.forEach(function (t) {
+        var li = el("li"); li.appendChild(el("span", "box" + (t.done ? " on" : "")));
+        li.appendChild(document.createTextNode("#" + t.id + " " + t.title)); ul.appendChild(li);
+      });
+    }
+    function hit(list, bad) {
+      lines.forEach(function (l) { l.classList.remove("hit", "hit-bad"); });
+      [1, 2].concat(list).forEach(function (n) { lines[n - 1].classList.add(bad && n > 2 ? "hit-bad" : "hit"); });
+    }
+    function reset() {
+      tasks = clone(INITIAL); nextId = 4; paint(); log.clear();
+      lines.forEach(function (l) { l.classList.remove("hit", "hit-bad"); });
+      out("action").textContent = "aucune";
+    }
+    root.addEventListener("click", function (e) {
+      if (e.target.closest('[data-act="reset"]')) { reset(); return; }
+      var b = e.target.closest("[data-action]"); if (!b) return;
+      var type = b.getAttribute("data-action");
+      var first = tasks.length ? tasks[0].id : null;
+      if (type !== "added" && first === null) { log.add("l-skip", "La liste est vide : ajoute une tâche ou réinitialise."); return; }
+      var text;
+      if (type === "added") text = '{ type: "added", id: ' + nextId + ', title: "Tâche ' + nextId + '" }';
+      else if (type === "renamed") text = '{ type: "renamed", id: ' + first + ', title: "Nouveau titre" }';
+      else text = '{ type: "' + type + '", id: ' + first + " }";
+      out("action").textContent = text;
+      log.add("l-state", "dispatch(" + text + ")");
+      hit(LINES[type], type === "renamed");
+      if (type === "added") { tasks = tasks.concat([{ id: nextId, title: "Tâche " + nextId, done: false }]); nextId++; }
+      else if (type === "toggled") tasks = tasks.map(function (t) { return t.id === first ? Object.assign({}, t, { done: !t.done }) : t; });
+      else if (type === "deleted") tasks = tasks.filter(function (t) { return t.id !== first; });
+      if (type === "renamed") log.add("l-warn", "reducer → default → throw new Error(\"Action inconnue : renamed\"). L'état ne change pas : il faudrait ajouter un case.");
+      else log.add("l-effect", "reducer → case \"" + type + "\" → nouveau tableau de " + tasks.length + " tâche(s) → rendu");
+      paint();
+    });
+    reset();
+  })();
+
+  /* ---------- 10 · Props ou contexte ---------- */
+  (function () {
+    var root = document.getElementById("demo-drill"); if (!root) return;
+    var out = outIn(root);
+    var mode = "props", theme = "light", toggled = false;
+    var CODE = {
+      props: "function App() {\n  const [theme, setTheme] = useState(\"light\");\n  return (\n    <>\n      <Header theme={theme} />\n      <Layout theme={theme} />\n    </>\n  );\n}\nfunction Layout({ theme }) {               // ne s'en sert pas\n  return <Sidebar theme={theme} />;\n}\nfunction Sidebar({ theme }) {              // ne s'en sert pas non plus\n  return <ThemeButton theme={theme} />;\n}\nfunction ThemeButton({ theme }) {\n  return <button>Thème : {theme}</button>;\n}",
+      context: "const ThemeContext = createContext(\"light\");\n\nfunction App() {\n  const [theme, setTheme] = useState(\"light\");\n  return (\n    <ThemeContext value={theme}>\n      <Header />\n      <Layout />\n    </ThemeContext>\n  );\n}\nfunction Layout() {\n  return <Sidebar />;                      // plus rien à transporter\n}\nfunction Sidebar() {\n  return <ThemeButton />;\n}\nfunction ThemeButton() {\n  const theme = useContext(ThemeContext);  // lu directement\n  return <button>Thème : {theme}</button>;\n}"
+    };
+    function node(k) { return root.querySelector('[data-node="' + k + '"]'); }
+    function note(k, t) { root.querySelector('[data-note="' + k + '"]').textContent = t; }
+    function paint() {
+      var q = "« " + theme + " »";
+      ["app", "header", "layout", "sidebar", "button"].forEach(function (k) { node(k).classList.remove("provider", "consumer", "carrier"); });
+      node("app").classList.add("provider"); node("header").classList.add("consumer"); node("button").classList.add("consumer");
+      if (mode === "props") {
+        node("layout").classList.add("carrier"); node("sidebar").classList.add("carrier");
+        note("app", "état : theme = " + q);
+        note("header", "reçoit theme en prop → l'utilise");
+        note("layout", "reçoit theme… et le passe à Sidebar");
+        note("sidebar", "reçoit theme… et le passe à ThemeButton");
+        note("button", "reçoit theme en prop → affiche " + q);
+        out("stats").textContent = "theme est passé 4 fois en props, dont 2 fois à des composants qui ne s'en servent pas." + (toggled ? " Changement de thème : tout le sous-arbre s'est re-rendu." : "");
+      } else {
+        note("app", "état : theme = " + q + " · fournit ThemeContext");
+        note("header", "useContext → " + q);
+        note("layout", "ne connaît pas theme");
+        note("sidebar", "ne connaît pas theme");
+        note("button", "useContext → " + q);
+        out("stats").textContent = "1 fournisseur et 2 lectures avec useContext. Layout et Sidebar ne sont plus concernés." + (toggled ? " Changement de thème : tout le sous-arbre s'est re-rendu, comme avec les props." : "");
+      }
+    }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]");
+      if (m) { mode = m.getAttribute("data-mode"); toggled = false; setSeg(root, mode); setCode(out("code"), CODE[mode]); paint(); return; }
+      if (e.target.closest('[data-act="toggle"]')) {
+        theme = theme === "light" ? "dark" : "light"; toggled = true; paint();
+        root.querySelectorAll(".rnode").forEach(flash);
+      }
+    });
+    setCode(out("code"), CODE[mode]); paint();
+  })();
+
+  /* ---------- 11 · Logique partagée ou état partagé ---------- */
+  (function () {
+    var root = document.getElementById("demo-share"); if (!root) return;
+    var out = outIn(root);
+    var mode = "hook", a = false, b = false, shared = false;
+    var CODE = {
+      hook: "function useToggle(initial = false) {\n  const [value, setValue] = useState(initial);\n  return [value, () => setValue(v => !v)];\n}\n\nfunction PanelA() {\n  const [on, toggle] = useToggle();   // son propre état\n  // …\n}\nfunction PanelB() {\n  const [on, toggle] = useToggle();   // un autre état, indépendant\n  // …\n}",
+      context: "const NotifContext = createContext(null);\n\nfunction NotifProvider({ children }) {\n  const [on, setOn] = useState(false);            // UN seul état\n  const value = useMemo(() => ({ on, toggle: () => setOn(v => !v) }), [on]);\n  return <NotifContext value={value}>{children}</NotifContext>;\n}\n\nfunction PanelA() {\n  const { on, toggle } = useContext(NotifContext);   // le même état…\n}\nfunction PanelB() {\n  const { on, toggle } = useContext(NotifContext);   // …pour les deux\n}"
+    };
+    function show(k, v) { var n = out(k); n.textContent = "Notifications : " + (v ? "activées" : "désactivées"); n.classList.toggle("on", v); }
+    function paint() { if (mode === "hook") { show("a", a); show("b", b); } else { show("a", shared); show("b", shared); } }
+    function reset() { a = false; b = false; shared = false; setCode(out("code"), CODE[mode]); paint(); verdict(out("verdict"), "Bascule l'un des deux panneaux."); }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); reset(); return; }
+      if (e.target.closest('[data-act="reset"]')) { reset(); return; }
+      var t = e.target.closest("[data-toggle]"); if (!t) return;
+      var k = t.getAttribute("data-toggle");
+      if (mode === "hook") {
+        if (k === "a") a = !a; else b = !b;
+        verdict(out("verdict"), "Seul le panneau " + k.toUpperCase() + " a changé : chaque appel de useToggle a son propre état.", "ok");
+      } else {
+        shared = !shared;
+        verdict(out("verdict"), "Les deux panneaux ont changé : ils lisent le même état, placé dans le contexte.", "ok");
+      }
+      paint();
+    });
+    reset();
+  })();
+
+  /* ---------- 11 · useDebouncedValue ---------- */
+  (function () {
+    var root = document.getElementById("demo-debounce"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 6);
+    var input = root.querySelector("#deb-input");
+    var q = "", dq = "", n1 = 0, n2 = 0, t = null;
+    function paint() {
+      out("q").textContent = JSON.stringify(q); out("dq").textContent = JSON.stringify(dq);
+      out("n1").textContent = n1; out("n2").textContent = n2;
+    }
+    input.addEventListener("input", function () {
+      q = input.value; n1++;
+      clearTimeout(t);
+      t = setTimeout(function () {
+        if (q === dq) return;
+        dq = q; n2++;
+        log.add("l-effect", "requête envoyée : GET /api/search?q=" + encodeURIComponent(dq));
+        paint();
+      }, 500);
+      paint();
+    });
+    root.querySelector('[data-act="reset"]').addEventListener("click", function () {
+      clearTimeout(t); q = ""; dq = ""; n1 = 0; n2 = 0; input.value = "";
+      log.clear(); log.add("l-empty", "Les requêtes réellement envoyées s'afficheront ici."); paint();
+    });
+    paint();
+  })();
+
+  /* ---------- 12 · lazy ---------- */
+  (function () {
+    var root = document.getElementById("demo-lazy"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 8);
+    var btn = root.querySelector('[data-act="toggle"]');
+    var shown = false, downloaded = false, loading = false, timer = null;
+    function tiles() {
+      var g = el("div", "tiles");
+      [["128", "utilisateurs"], ["342", "tâches ouvertes"], ["3", "erreurs sur 24 h"]].forEach(function (p) {
+        var t = el("div", "tile"); t.appendChild(el("b", null, p[0])); t.appendChild(el("span", null, p[1])); g.appendChild(t);
+      });
+      return g;
+    }
+    function paint() {
+      var s = out("stage"); s.innerHTML = "";
+      if (loading) { var p = el("p"); p.appendChild(el("span", "spin")); p.appendChild(document.createTextNode("Chargement du tableau de bord… (le fallback de Suspense)")); s.appendChild(p); }
+      else if (shown) s.appendChild(tiles());
+      else s.appendChild(el("p", "muted", "Le tableau de bord n'est pas affiché."));
+      out("files").textContent = "main.js (300 Ko)" + (downloaded ? " · AdminDashboard-3f2a.js (600 Ko)" : "");
+      btn.textContent = shown ? "Masquer le tableau de bord admin" : "Afficher le tableau de bord admin";
+      btn.disabled = loading;
+    }
+    btn.addEventListener("click", function () {
+      if (loading) return;
+      if (shown) { shown = false; log.add("l-skip", "AdminDashboard est retiré de l'écran. Son code reste en mémoire."); paint(); return; }
+      if (downloaded) { shown = true; log.add("l-effect", "Code déjà téléchargé : affichage immédiat, sans fallback."); paint(); return; }
+      loading = true;
+      log.add("l-state", "React rend AdminDashboard : son code n'est pas encore là → le composant suspend.");
+      log.add("l-render", "Suspense affiche son fallback. Téléchargement de AdminDashboard-3f2a.js (600 Ko)…");
+      paint();
+      timer = setTimeout(function () {
+        loading = false; downloaded = true; shown = true;
+        log.add("l-effect", "Fichier reçu → React réessaie le rendu → le tableau de bord remplace le fallback.");
+        paint();
+      }, 1500);
+    });
+    root.querySelector('[data-act="reset"]').addEventListener("click", function () {
+      clearTimeout(timer); shown = false; downloaded = false; loading = false; log.clear(); paint();
+    });
+    paint();
+  })();
+
+  /* ---------- 12 · Une ou plusieurs boundaries ---------- */
+  (function () {
+    var root = document.getElementById("demo-sus"); if (!root) return;
+    var out = outIn(root);
+    var log = logger(out("log"), 8);
+    var CODE = {
+      one: "<Suspense fallback={<PageSkeleton />}>\n  <Header />\n  <TaskList />     {/* données prêtes en 1 s */}\n  <StatsChart />   {/* données prêtes en 2,5 s */}\n</Suspense>",
+      nested: "<Suspense fallback={<PageSkeleton />}>\n  <Header />\n  <Suspense fallback={<ListSkeleton />}>\n    <TaskList />     {/* données prêtes en 1 s */}\n  </Suspense>\n  <Suspense fallback={<ChartSkeleton />}>\n    <StatsChart />   {/* données prêtes en 2,5 s */}\n  </Suspense>\n</Suspense>"
+    };
+    var mode = "one", loaded = false, ready = { list: false, chart: false }, timers = [];
+    function zone(title, content) { var z = el("div", "dash-zone"); z.appendChild(el("p", null, title)); z.appendChild(content); return z; }
+    function list() { var ul = el("ul"); ["Lire le module 12", "Relire la PR", "Tester lazy"].forEach(function (t) { ul.appendChild(el("li", null, t)); }); return ul; }
+    function bars() { var b = el("div", "bars"); [40, 70, 55, 90, 65].forEach(function (h) { var i = el("i"); i.style.height = h + "%"; b.appendChild(i); }); return b; }
+    function skel(name, page) { return el("div", "skel" + (page ? " skel-page" : ""), name); }
+    function head() { var h = el("div", "dash-head", "TaskFlow · Tableau de bord"); h.appendChild(el("span", null, "Header")); return h; }
+    function render() {
+      var d = out("dash"); d.innerHTML = "";
+      if (!loaded) { d.appendChild(el("div", "blank", "Clique sur « Charger la page ».")); return; }
+      if (mode === "one" && !(ready.list && ready.chart)) { d.appendChild(skel("PageSkeleton", true)); return; }
+      d.appendChild(head());
+      var row = el("div", "dash-row");
+      row.appendChild(ready.list ? zone("TaskList", list()) : skel("ListSkeleton"));
+      row.appendChild(ready.chart ? zone("StatsChart", bars()) : skel("ChartSkeleton"));
+      d.appendChild(row);
+    }
+    function reset() { timers.forEach(clearTimeout); timers = []; loaded = false; ready = { list: false, chart: false }; log.clear(); render(); }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]");
+      if (m) { mode = m.getAttribute("data-mode"); setSeg(root, mode); setCode(out("code"), CODE[mode]); reset(); return; }
+      if (!e.target.closest('[data-act="load"]')) return;
+      reset(); loaded = true; render();
+      log.add("l-render", "0,0 s · Header est prêt" + (mode === "one" ? ", mais la boundary attend TaskList et StatsChart : PageSkeleton" : " et s'affiche ; TaskList et StatsChart suspendent"));
+      timers.push(setTimeout(function () {
+        ready.list = true; render();
+        log.add(mode === "one" ? "l-skip" : "l-effect", "1,0 s · TaskList est prête" + (mode === "one" ? ", mais la boundary attend encore StatsChart" : " → elle remplace ListSkeleton"));
+      }, 1000));
+      timers.push(setTimeout(function () {
+        ready.chart = true; render();
+        log.add("l-effect", "2,5 s · StatsChart est prêt" + (mode === "one" ? " → toute la page s'affiche d'un coup" : " → il remplace ChartSkeleton"));
+      }, 2500));
+    });
+    setCode(out("code"), CODE[mode]); render();
+  })();
+
+  /* ---------- 13 · Un widget qui plante ---------- */
+  (function () {
+    var root = document.getElementById("demo-crash"); if (!root) return;
+    var out = outIn(root);
+    var CODE = {
+      none: "function Dashboard() {\n  return (\n    <>\n      <Header />\n      <TaskList />\n      <StatsChart />   {/* lève une erreur pendant son rendu */}\n    </>\n  );\n}",
+      global: "<ErrorBoundary fallback={<GlobalError />}>\n  <Header />\n  <TaskList />\n  <StatsChart />\n</ErrorBoundary>",
+      widget: "<ErrorBoundary fallback={<GlobalError />}>\n  <Header />\n  <ErrorBoundary FallbackComponent={WidgetError}>\n    <TaskList />\n  </ErrorBoundary>\n  <ErrorBoundary FallbackComponent={WidgetError}>\n    <StatsChart />\n  </ErrorBoundary>\n</ErrorBoundary>"
+    };
+    var mode = "none", crashed = false;
+    function zone(title, content) { var z = el("div", "dash-zone"); z.appendChild(el("p", null, title)); z.appendChild(content); return z; }
+    function list() { var ul = el("ul"); ["Lire le module 13", "Relire la PR", "Corriger le graphique"].forEach(function (t) { ul.appendChild(el("li", null, t)); }); return ul; }
+    function bars() { var b = el("div", "bars"); [50, 80, 35, 70, 60].forEach(function (h) { var i = el("i"); i.style.height = h + "%"; b.appendChild(i); }); return b; }
+    function head() { var h = el("div", "dash-head", "TaskFlow · Tableau de bord"); h.appendChild(el("span", null, "Header")); return h; }
+    function retryBtn(label) { var b = el("button", "btn small", label); b.type = "button"; b.setAttribute("data-act", "retry"); return b; }
+    function render() {
+      var d = out("dash"); d.innerHTML = "";
+      if (crashed && mode === "none") { d.appendChild(el("div", "blank", "(page blanche : React a retiré toute l'interface)")); return; }
+      if (crashed && mode === "global") {
+        var g = el("div", "crash-global"); g.appendChild(el("b", null, "Oups, une erreur est survenue."));
+        g.appendChild(el("span", null, "Le contenu de secours de la boundary globale remplace tout le tableau de bord."));
+        g.appendChild(retryBtn("Recharger")); d.appendChild(g); return;
+      }
+      d.appendChild(head());
+      var row = el("div", "dash-row");
+      row.appendChild(zone("TaskList", list()));
+      if (crashed) {
+        var w = el("div", "crash-widget"); w.appendChild(el("b", null, "Ce graphique n'a pas pu s'afficher."));
+        w.appendChild(retryBtn("Réessayer")); row.appendChild(w);
+      } else row.appendChild(zone("StatsChart", bars()));
+      d.appendChild(row);
+    }
+    function judge() {
+      if (!crashed) { verdict(out("verdict"), "Tout fonctionne. Clique sur « Faire planter StatsChart »."); return; }
+      if (mode === "none") verdict(out("verdict"), "Sans boundary, une erreur dans un seul widget retire toute l'interface. L'utilisateur ne peut plus rien faire.", "ko");
+      else if (mode === "global") verdict(out("verdict"), "La boundary globale évite la page blanche, mais remplace tout : la liste des tâches, qui fonctionnait, a disparu aussi.", "");
+      else verdict(out("verdict"), "Seul le graphique est remplacé. L'en-tête et la liste restent utilisables, et « Réessayer » remonte uniquement le graphique.", "ok");
+    }
+    function setMode(m) { mode = m; crashed = false; setSeg(root, m); setCode(out("code"), CODE[m]); render(); judge(); }
+    root.addEventListener("click", function (e) {
+      var m = e.target.closest("[data-mode]"); if (m) { setMode(m.getAttribute("data-mode")); return; }
+      var a = e.target.closest("[data-act]"); if (!a) return;
+      var act = a.getAttribute("data-act");
+      if (act === "crash") { crashed = true; render(); judge(); }
+      else if (act === "retry") { crashed = false; render(); verdict(out("verdict"), "Le sous-arbre a été remonté de zéro : cette fois, le graphique s'affiche.", "ok"); }
+      else if (act === "reset") setMode(mode);
+    });
+    setMode("none");
+  })();
+
+  /* ---------- 14 · React DevTools simulés ---------- */
+  (function () {
+    var root = document.getElementById("demo-devtools"); if (!root) return;
+    var out = outIn(root);
+    var TASKS = '[\n  { id: 1, title: "Lire", is_done: false },\n  { id: 2, title: "Coder", is_done: true },\n  { id: 3, title: "Tester", is_done: false }\n]';
+    var C = {
+      App: { title: "App", props: [], hooks: [["State · tasks", TASKS]], by: "createRoot()" },
+      Header: { title: "Header", props: [["remaining", "3"]], hooks: [], by: "App", src: "<p>{remaining} tâches restantes</p>", hint: "Header affiche fidèlement sa prop : 3." },
+      TaskList: { title: "TaskList", props: [["tasks", "Array(3)"], ["onToggle", "ƒ handleToggle()"]], hooks: [], by: "App" },
+      Item1: { title: 'TaskItem key="1"', props: [["task", '{ id: 1, title: "Lire", is_done: false }'], ["onToggle", "ƒ handleToggle()"]], hooks: [], by: "TaskList → App", src: "<input type=\"checkbox\" checked={task.done} />" },
+      Item2: { title: 'TaskItem key="2"', props: [["task", '{ id: 2, title: "Coder", is_done: true }'], ["onToggle", "ƒ handleToggle()"]], hooks: [], by: "TaskList → App", src: "<input type=\"checkbox\" checked={task.done} />", hint: "Regarde le nom du champ dans les props, puis celui que lit le code source." },
+      Item3: { title: 'TaskItem key="3"', props: [["task", '{ id: 3, title: "Tester", is_done: false }'], ["onToggle", "ƒ handleToggle()"]], hooks: [], by: "TaskList → App", src: "<input type=\"checkbox\" checked={task.done} />" }
+    };
+    function kv(k, v) {
+      var p = el("p", "dt-kv"); p.appendChild(el("span", "k", k + ": "));
+      p.appendChild(el("span", v.indexOf("ƒ") === 0 ? "f" : "v", v)); return p;
+    }
+    function inspect(id) {
+      var c = C[id], box = out("inspect"); box.innerHTML = "";
+      box.appendChild(el("h5", null, c.title));
+      box.appendChild(el("p", "dt-sec", "props"));
+      if (!c.props.length) box.appendChild(el("p", "dt-kv", "(aucune)"));
+      c.props.forEach(function (p) { box.appendChild(kv(p[0], p[1])); });
+      box.appendChild(el("p", "dt-sec", "hooks"));
+      if (!c.hooks.length) box.appendChild(el("p", "dt-kv", "(aucun)"));
+      c.hooks.forEach(function (h) { box.appendChild(kv(h[0], h[1])); });
+      box.appendChild(el("p", "dt-sec", "rendered by"));
+      box.appendChild(el("p", "dt-kv", c.by));
+      if (c.src) { box.appendChild(el("p", "dt-sec", "source")); box.appendChild(el("p", "dt-kv", c.src)); }
+      if (c.hint) box.appendChild(el("p", "dt-hint", c.hint));
+      root.querySelectorAll(".dt-node").forEach(function (n) { n.setAttribute("aria-selected", n.getAttribute("data-c") === id ? "true" : "false"); });
+    }
+    root.addEventListener("click", function (e) {
+      var n = e.target.closest(".dt-node"); if (n) { inspect(n.getAttribute("data-c")); return; }
+      var t = e.target.closest("[data-dtab]"); if (!t) return;
+      var tab = t.getAttribute("data-dtab");
+      root.querySelectorAll("[data-dtab]").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-dtab") === tab ? "true" : "false"); });
+      root.querySelectorAll("[data-dpane]").forEach(function (p) { p.hidden = p.getAttribute("data-dpane") !== tab; });
+    });
+    inspect("Item2");
+  })();
+
+  /* ---------- 15 · Remonter la piste ---------- */
+  (function () {
+    var root = document.getElementById("demo-trace"); if (!root) return;
+    var out = outIn(root);
+    var steps = root.querySelectorAll(".trace-step");
+    var prev = root.querySelector('[data-act="prev"]'), next = root.querySelector('[data-act="next"]');
+    var pos = 1;
+    function show() {
+      steps.forEach(function (s) { s.hidden = Number(s.getAttribute("data-step")) !== pos; });
+      out("pos").textContent = "Étape " + pos + " / " + steps.length;
+      prev.disabled = pos === 1;
+      next.disabled = pos === steps.length;
+      next.textContent = pos === steps.length ? "Terminé" : "Étape suivante";
+    }
+    prev.addEventListener("click", function () { if (pos > 1) { pos--; show(); } });
+    next.addEventListener("click", function () { if (pos < steps.length) { pos++; show(); } });
+    show();
+  })();
+
+  /* ---------- 16 · Relecture de code ---------- */
+  (function () {
+    var root = document.getElementById("demo-review"); if (!root) return;
+    var out = outIn(root);
+    var ISSUES = {
+      A: { lines: [5], title: "Ligne 5 · un état inutile", text: "results se calcule à partir de tasks et de query : c'est une valeur dérivée. La stocker dans un état oblige à la synchroniser, d'où l'effet qui suit (module 05)." },
+      B: { lines: [7, 8], title: "Lignes 7 et 8 · un effet pour faire un calcul", text: "Rien d'extérieur ici : l'effet ne fait que calculer. Résultat : un premier rendu avec une liste vide, puis un second avec la bonne liste. Un calcul direct dans le rendu suffit (module 08)." },
+      C: { lines: [9], title: "Ligne 9 · une dépendance manquante", text: "L'effet lit tasks, mais seul query est déclaré. Si le parent envoie de nouvelles tâches, la liste ne se met pas à jour. Le linter l'aurait signalé (module 08)." },
+      D: { lines: [11], title: "Ligne 11 · sort modifie le tableau", text: "sort() trie sur place : il modifie le tableau rangé dans l'état results au lieu d'en créer un nouveau. Utilise toSorted() (module 05)." },
+      E: { lines: [17, 18], title: "Lignes 17 et 18 · l'index comme key", text: "La liste est filtrée et triée : avec key={i}, les lignes changent d'identité à chaque frappe. Utilise key={t.id} (module 06)." },
+      F: { lines: [19], title: "Ligne 19 · dangerouslySetInnerHTML", text: "Le titre est saisi par un utilisateur : l'insérer comme du HTML ouvre une faille XSS. Affiche-le en texte avec {t.title}, que React protège (module 03, règle 10)." }
+    };
+    var OK = {
+      1: "Rien à signaler : les imports. (Une fois l'effet supprimé, useEffect ne servira plus.)",
+      3: "Rien à signaler : un composant qui reçoit les tâches en prop.",
+      4: "Rien à signaler : query est une vraie donnée saisie par l'utilisateur, elle a sa place dans un état.",
+      15: "Rien à signaler : un champ contrôlé correct (module 06)."
+    };
+    var byLine = {};
+    Object.keys(ISSUES).forEach(function (k) { ISSUES[k].lines.forEach(function (l) { byLine[l] = k; }); });
+    var found = {};
+    function count() { return Object.keys(found).length; }
+    function side(title, text, cls) {
+      var s = out("explain"); s.innerHTML = "";
+      s.appendChild(el("p", "rv-t " + cls, title)); s.appendChild(el("p", null, text));
+      if (count() === 6) s.appendChild(el("p", "rv-t ok", "Bravo : les six problèmes sont trouvés. Compare avec la version corrigée sous le code."));
+    }
+    root.addEventListener("click", function (e) {
+      if (e.target.closest('[data-act="reset"]')) {
+        found = {}; out("found").textContent = 0;
+        root.querySelectorAll(".rl").forEach(function (r) { r.classList.remove("is-bad", "is-ok"); });
+        var s = out("explain"); s.innerHTML = ""; s.appendChild(el("p", "muted", "Clique sur une ligne du code."));
+        return;
+      }
+      var line = e.target.closest(".rl"); if (!line) return;
+      var n = Number(line.getAttribute("data-l"));
+      var k = byLine[n];
+      if (k) {
+        found[k] = true;
+        ISSUES[k].lines.forEach(function (l) { root.querySelector('.rl[data-l="' + l + '"]').classList.add("is-bad"); });
+        out("found").textContent = count();
+        side(ISSUES[k].title, ISSUES[k].text, "bad");
+      } else {
+        line.classList.add("is-ok");
+        side("Ligne " + n + " · rien à signaler", OK[n] || "Cette ligne ne pose pas de problème.", "ok");
+      }
+    });
+  })();
+})();
+</script>
