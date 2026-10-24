@@ -31,7 +31,7 @@ Ta progression (modules marqués comme lus) est enregistrée dans le navigateur,
 | 16 | Travailler avec l'IA | prompts, signaux d'alerte en relecture |
 | 17 | Antisèche et suite | résumé des hooks, glossaire, projet fil rouge |
 
-Tous les modules ont été retravaillés pour avancer pas à pas, avec des schémas, une quarantaine de démos interactives, des aides à la décision, des exercices corrigés et un encadré « En bref » par module.
+Tous les modules ont été retravaillés pour avancer pas à pas, avec des schémas, une trentaine de démos interactives, trois aides à la décision, des exercices corrigés et un encadré « En bref » par module.
 
 ## Organisation du dépôt
 
