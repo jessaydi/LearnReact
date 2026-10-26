@@ -1299,10 +1299,8 @@ u3 === u1               // false : adresses différentes, même si le contenu es
     <div class="mem-box p2"><b>objet n°2</b>{ name: "Grace" }</div>
   </div>
 </div>
-<aside class="note analogy"><p class="label">Analogie</p>
-<p>Une variable qui « contient » un objet est comme un papier où est notée l'adresse d'une maison. Copier la variable, c'est recopier l'adresse sur un deuxième papier : il y a toujours une seule maison. Si quelqu'un repeint la maison, tous les détenteurs de l'adresse la verront repeinte. Pour avoir deux maisons, il faut en construire une seconde.</p>
-<p><code>===</code> sur deux objets compare les adresses, pas l'intérieur des maisons. React compare de cette façon : retiens cette image, le module 05 en dépend.</p>
-</aside>
+<p>Une variable qui contient un objet ne contient pas l'objet lui-même, mais une référence vers lui. Copier la variable copie la référence : il n'y a toujours qu'un seul objet, et le modifier est visible par toutes les variables qui y pointent. Pour avoir deux objets, il faut en créer un second.</p>
+<p><code>===</code> sur deux objets compare les références, pas le contenu. React compare de cette façon, et le module 05 en dépend.</p>
 
 <h3>9. Déstructuration, spread et rest</h3>
 <figure class="code"><figcaption>déstructuration.jsx</figcaption><pre><code class="language-jsx">// Déstructurer un objet : sortir des champs dans des variables
@@ -1346,9 +1344,7 @@ import { useState } from "react";      // un nom sans "./" : une bibliothèque i
 
 <h3>12. L'asynchrone : Promise, async, await</h3>
 <p>Un appel réseau prend du temps. JavaScript ne bloque pas en l'attendant : il te donne tout de suite une <strong>Promise</strong>, une promesse de résultat futur, et continue son travail.</p>
-<aside class="note analogy"><p class="label">Analogie</p>
-<p>Au pressing, on te remet un ticket tout de suite ; les vêtements, tu les récupères plus tard. La Promise est le ticket. <code>await</code> veut dire « j'attends ici que le ticket soit honoré avant de continuer cette fonction ».</p>
-</aside>
+<p>Une <code>Promise</code> représente un résultat qui n'est pas encore disponible. <code>await</code> signifie : attendre ici que la Promise soit terminée avant de continuer cette fonction.</p>
 <figure class="code"><figcaption>api.js</figcaption><pre><code class="language-javascript">// Avec async / await (le plus lisible)
 async function loadTasks() {
   try {
