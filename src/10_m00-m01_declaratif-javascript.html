@@ -20,7 +20,15 @@
 <header class="hero">
   <p class="eyebrow">Cours · React 19.3 · pour développeurs Python et C#</p>
   <h1>Les fondamentaux de React</h1>
-  <p class="lede">Tu sais concevoir une API, découper un service, débugger une requête lente. On part de là. Chaque notion de React est expliquée pas à pas, avec des images simples, du code commenté et des démos à manipuler, puis se termine par un exercice et un quiz.</p>
+  <div class="prereq">
+    <p class="label">Prérequis</p>
+    <ul>
+      <li>Savoir programmer dans un langage backend comme Python ou C# : variables, fonctions, classes, listes et dictionnaires.</li>
+      <li>Connaître les bases d'une API web : requêtes HTTP, codes de statut, JSON.</li>
+      <li>Avoir déjà lu un peu de HTML : balises, attributs, formulaires.</li>
+      <li>Aucune connaissance de JavaScript ni de React : le module 01 couvre le JavaScript utile, le module 02 l'installation des outils.</li>
+    </ul>
+  </div>
 
   <div class="thesis">
     <p class="formula" aria-label="UI égale f de l'état"><span>UI</span> <span class="eq">=</span> <span class="f">f</span>(<mark>état</mark>)</p>
@@ -190,10 +198,6 @@
 p.textContent = "1 tâche restante";           // 2. changer son texte
                                               // 3. le navigateur redessine ce paragraphe</code></pre></figure>
 
-<aside class="note analogy"><p class="label">Analogie</p>
-<p>Le HTML, c'est la notice de montage d'un meuble en kit : du papier. Le DOM, c'est le meuble une fois monté dans ton salon. L'écran, c'est ce que tu vois en entrant dans la pièce.</p>
-<p>Une fois le meuble monté, tu ne retouches plus la notice : pour déplacer une étagère, tu agis directement sur le meuble. JavaScript fait pareil : il agit sur le DOM, et ce que tu vois change.</p>
-</aside>
 <aside class="note bridge"><p class="label">Côté backend</p>
 <p>Tu connais <code>json.loads()</code> en Python : un texte JSON devient un dictionnaire que tu peux modifier. Le navigateur fait la même chose avec le HTML : le texte devient un arbre d'objets JavaScript, le DOM. La différence : le navigateur surveille cet arbre et redessine l'écran dès qu'il change.</p>
 </aside>
@@ -237,10 +241,6 @@ p.textContent = "1 tâche restante";           // 2. changer son texte
 <li><strong>Impératif</strong> : tu donnes les <em>étapes</em>. « Trouve le paragraphe, change son texte, puis trouve la pastille, change son chiffre… »</li>
 <li><strong>Déclaratif</strong> : tu décris le <em>résultat</em>. « L'en-tête affiche le nombre de tâches restantes. » L'outil se charge des étapes.</li>
 </ul>
-<aside class="note analogy"><p class="label">Analogie</p>
-<p>En taxi, le style impératif consiste à guider le chauffeur rue par rue : « à gauche, tout droit, deuxième à droite ». Le style déclaratif consiste à donner l'adresse : le GPS calcule le trajet, et le recalcule si une rue est fermée.</p>
-<p>Autre image : un tableur. La cellule <code>=A1*2</code> ne contient pas d'instruction « mets-toi à jour quand A1 change ». Elle décrit un résultat, et le tableur s'occupe du reste. Tes composants React sont les formules ; les données sont les cellules d'entrée.</p>
-</aside>
 <div class="table-wrap"><table>
 <thead><tr><th></th><th>Impératif (à la main)</th><th>Déclaratif (React)</th></tr></thead>
 <tbody>
@@ -274,10 +274,7 @@ p.textContent = "1 tâche restante";           // 2. changer son texte
 </div>
 
 <p>Tu n'écris que les étapes 1, 2 et le gestionnaire de clic. React s'occupe des étapes 3 et 4, le navigateur de l'étape 5.</p>
-<aside class="note analogy"><p class="label">Analogie · les étapes 3 et 4</p>
-<p>Pense à un décorateur d'intérieur. Tu lui montres une photo de la pièce telle que tu la veux. Il compare avec la pièce actuelle et ne bouge que ce qui diffère : il déplace la lampe, il ne vide pas toute la maison pour la remeubler. C'est le jeu des sept différences, appliqué à l'écran.</p>
-<p>Pourquoi ne pas tout reconstruire ? Parce que modifier le DOM coûte du temps, et que tout reconstruire ferait perdre au passage le texte en cours de saisie, la position de défilement ou le champ actif.</p>
-</aside>
+<p>Pourquoi React compare-t-il au lieu de tout reconstruire ? Parce que modifier le DOM coûte du temps, et que tout reconstruire ferait perdre au passage le texte en cours de saisie, la position de défilement ou le champ actif.</p>
 <aside class="note key"><p class="label">À retenir</p>
 <p>Tu entendras parler de « DOM virtuel ». C'est le nom donné à la description légère de l'écran que tes composants renvoient (étape 2) et que React compare (étape 3), avant de toucher au vrai DOM (étape 4).</p>
 </aside>
@@ -286,14 +283,14 @@ p.textContent = "1 tâche restante";           // 2. changer son texte
 <div class="table-wrap"><table>
 <thead><tr><th>Mot</th><th>En une phrase</th><th>Une image pour s'en souvenir</th></tr></thead>
 <tbody>
-<tr><td><strong>DOM</strong></td><td>L'arbre d'objets que le navigateur construit à partir du HTML et qu'il affiche.</td><td>Le meuble monté (le HTML était la notice).</td></tr>
+<tr><td><strong>DOM</strong></td><td>L'arbre d'objets que le navigateur construit à partir du HTML et qu'il affiche.</td><td>L'arbre que montre l'onglet « Éléments » des outils du navigateur (F12).</td></tr>
 <tr><td><strong>Composant</strong></td><td>Un morceau d'interface réutilisable, écrit comme une fonction.</td><td>Une pièce de Lego qu'on assemble avec d'autres.</td></tr>
-<tr><td><strong>JSX</strong></td><td>La syntaxe qui ressemble à du HTML, écrite dans le JavaScript, pour décrire l'écran.</td><td>Le croquis de la pièce telle qu'on la veut.</td></tr>
+<tr><td><strong>JSX</strong></td><td>La syntaxe qui ressemble à du HTML, écrite dans le JavaScript, pour décrire l'écran.</td><td>Un modèle d'écran dont les trous sont remplis par tes données.</td></tr>
 <tr><td><strong>Props</strong></td><td>Les informations qu'un composant reçoit de son parent.</td><td>Les options cochées sur un bon de commande.</td></tr>
 <tr><td><strong>État (state)</strong></td><td>La mémoire d'un composant. Quand elle change, l'écran suit.</td><td>Le tableau blanc qu'on efface et réécrit.</td></tr>
-<tr><td><strong>Rendu (render)</strong></td><td>React appelle ton composant pour savoir quoi afficher.</td><td>Redessiner le croquis avec les nouvelles données.</td></tr>
+<tr><td><strong>Rendu (render)</strong></td><td>React appelle ton composant pour savoir quoi afficher.</td><td>Recalculer l'écran voulu à partir des nouvelles données.</td></tr>
 <tr><td><strong>Hook</strong></td><td>Une fonction <code>use…</code> qui donne un pouvoir de React à ton composant (mémoire, effets…).</td><td>Une prise murale où l'on branche un appareil.</td></tr>
-<tr><td><strong>Effet</strong></td><td>Une action vers l'extérieur de React : réseau, minuteur, titre de l'onglet.</td><td>Passer un coup de fil une fois la pièce rangée.</td></tr>
+<tr><td><strong>Effet</strong></td><td>Une action vers l'extérieur de React : réseau, minuteur, titre de l'onglet.</td><td>Prévenir l'extérieur une fois l'écran à jour.</td></tr>
 <tr><td><strong>Contexte</strong></td><td>Une valeur partagée avec tout un groupe de composants, sans la passer de main en main.</td><td>Le Wi-Fi de la maison.</td></tr>
 </tbody></table></div>
 
