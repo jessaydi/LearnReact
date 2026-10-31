@@ -1010,9 +1010,6 @@ function Avatar({ name, size = 48, online = false }) {
 <Card title="Statistiques">
   <p>12 tâches terminées cette semaine</p>
 </Card></code></pre></figure>
-<aside class="note analogy"><p class="label">Analogie</p>
-<p><code>Card</code> est un cadre photo. Le cadre fournit la bordure, le titre, la mise en page ; tu glisses la photo que tu veux à l'intérieur. Le même cadre sert pour une liste de tâches ou pour des statistiques. <code>children</code>, c'est la photo.</p>
-</aside>
 
 <h3>Les props sont en lecture seule</h3>
 <p>Un composant ne modifie jamais ses props. Elles appartiennent au parent qui les a fournies.</p>
@@ -1020,9 +1017,6 @@ function Avatar({ name, size = 48, online = false }) {
   task.done = true; // FAUX : on modifie un objet qui appartient au parent
   return <li>{task.title}</li>;
 }</code></pre></figure>
-<aside class="note analogy"><p class="label">Analogie</p>
-<p>Un bon de commande rempli par le client. Le cuisinier le lit et prépare le plat ; il ne raye pas la commande pour la modifier à sa guise. S'il faut changer quelque chose, il le <strong>demande</strong> au client.</p>
-</aside>
 
 <h3>Les données descendent, les événements remontent</h3>
 <p>Mais alors, comment cocher une tâche si <code>TaskItem</code> ne peut pas modifier <code>task</code> ? Le parent lui donne, en plus de la donnée, une <strong>fonction à appeler</strong> quand il se passe quelque chose. C'est un <em>callback</em>.</p>
@@ -1086,12 +1080,6 @@ function TaskItem({ task, onToggle }) {
 </div>
 
 <p>Par convention, la prop qui reçoit le callback s'appelle <code>onQuelqueChose</code> (<code>onToggle</code>, <code>onDelete</code>) et la fonction du parent <code>handleQuelqueChose</code>.</p>
-<aside class="note analogy"><p class="label">Analogie</p>
-<p>Le callback est une sonnette. Le parent installe la sonnette (<code>onToggle</code>) ; l'enfant se contente d'appuyer dessus quand on le coche. Il ne sait pas ce qui se passe derrière la porte : c'est le parent qui décide quoi faire.</p>
-</aside>
-<aside class="note bridge"><p class="label">Côté backend</p>
-<p>C'est un callback passé en paramètre, comme une fonction passée à <code>sorted(key=...)</code> en Python, ou un <code>Action&lt;int&gt;</code> en C#. L'enfant ne dépend pas du parent : il dépend seulement d'une fonction avec la bonne signature.</p>
-</aside>
 
 <h3>Le spread de props</h3>
 <figure class="code"><figcaption>Button.jsx</figcaption><pre><code class="language-jsx">function Button({ variant = "primary", ...rest }) {
